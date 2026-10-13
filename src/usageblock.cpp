@@ -3,12 +3,18 @@
 #include "theme.h"
 #include "usage.h"
 
+#include <KConfigGroup>
+
 #include <QDateTime>
 #include <QFontMetrics>
 #include <QHelpEvent>
 #include <QLocale>
+#include <QMouseEvent>
 #include <QPainter>
+#include <QTimer>
 #include <QToolTip>
+
+#include <algorithm>
 
 namespace
 {
@@ -17,6 +23,7 @@ constexpr int nameHeight = 24;
 constexpr int windowHeight = 19;
 constexpr int lineHeight = 18;
 constexpr int accountGap = 8;
+const QString resetGlyph = QStringLiteral("↻ ");
 
 // Konvoy speaks English, so the dates do too. Compact leaves out the time of a
 // date more than a week away, so it fits the reset column.
@@ -44,12 +51,12 @@ QString timeLeft(qint64 secs)
     const qint64 days = minutes / 1440;
     const qint64 hours = minutes % 1440 / 60;
     if (days > 0) {
-        return QStringLiteral("%1 d %2 h").arg(days).arg(hours);
+        return QStringLiteral("%1d %2h").arg(days).arg(hours);
     }
     if (hours > 0) {
-        return QStringLiteral("%1 h %2 m").arg(hours).arg(minutes % 60);
+        return QStringLiteral("%1h %2m").arg(hours).arg(minutes % 60);
     }
-    return QStringLiteral("%1 m").arg(qMax<qint64>(1, minutes));
+    return QStringLiteral("%1m").arg(qMax<qint64>(1, minutes));
 }
 
 QColor percentColor(double percent, const QColor &normal)
@@ -85,7 +92,17 @@ UsageBlock::UsageBlock(const Config *config, const UsageModel *model, QWidget *p
     , m_model(model)
 {
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    setMouseTracking(true);
+    m_timeLeft = m_config->state()->group(QStringLiteral("Usage")).readEntry("ShowTimeLeft", false);
     m_height = contentHeight();
+    // The time left counts down between two updates of the numbers.
+    auto *tick = new QTimer(this);
+    tick->start(15000);
+    connect(tick, &QTimer::timeout, this, [this] {
+        if (m_timeLeft && isVisible()) {
+            update();
+        }
+    });
     connect(model, &UsageModel::changed, this, [this] {
         const int h = contentHeight();
         if (h != m_height) {
@@ -167,7 +184,11 @@ void UsageBlock::paintEvent(QPaintEvent *)
     y += headerHeight;
 
     const qreal percentWidth = QFontMetrics(small).horizontalAdvance(QStringLiteral("100%"));
-    const qreal resetWidth = QFontMetrics(tiny).horizontalAdvance(QStringLiteral("↻ Mon 11:00")) + 4;
+    const QFontMetrics tinyMetrics(tiny);
+    const qreal resetWidth = qMax(tinyMetrics.horizontalAdvance(resetGlyph + QStringLiteral("Mon 11:00")),
+                                  tinyMetrics.horizontalAdvance(resetGlyph + QStringLiteral("23h 59m")))
+        + 4;
+    m_resetRects.clear();
     const qreal barX = 36;
     const qreal barWidth = w - barX - percentWidth - resetWidth - 24;
 
@@ -177,7 +198,7 @@ void UsageBlock::paintEvent(QPaintEvent *)
 
         // Without an open pane the numbers are the last ones Claude Code had.
         const QString age = !u || u->asOf == 0 ? QStringLiteral("no numbers yet") : !u->live ? QStringLiteral("as of ") + when(u->asOf, now) : QString();
-        const qreal ageWidth = age.isEmpty() ? 0 : QFontMetrics(tiny).horizontalAdvance(age) + 8;
+        const qreal ageWidth = age.isEmpty() ? 0 : tinyMetrics.horizontalAdvance(age) + 8;
         Theme::paintBadge(p, QRectF(10, y, 18, 18), account.key, account.color);
         p.setFont(bold);
         p.setPen(text);
@@ -207,8 +228,10 @@ void UsageBlock::paintEvent(QPaintEvent *)
             if (win.known() && win.resetsAt > 0 && !passed) {
                 p.setFont(tiny);
                 p.setPen(dimmer);
-                p.drawText(QRectF(w - resetWidth - 10, y, resetWidth, 16), Qt::AlignVCenter | Qt::AlignRight,
-                           QStringLiteral("↻ ") + when(win.resetsAt, now, true));
+                const QRectF cell(w - resetWidth - 10, y, resetWidth, 16);
+                p.drawText(cell, Qt::AlignVCenter | Qt::AlignRight,
+                           resetGlyph + (m_timeLeft ? timeLeft(win.resetsAt - now) : when(win.resetsAt, now, true)));
+                m_resetRects.append(cell);
             }
             y += windowHeight;
         }
@@ -252,7 +275,37 @@ QString UsageBlock::tooltip(int index, qint64 now) const
     if (!u->live) {
         lines << QStringLiteral("No pane of this account is open, so they may be out of date.");
     }
+    lines << (m_timeLeft ? QStringLiteral("Click a reset time to show the clock time.") : QStringLiteral("Click a reset time to show the time left."));
     return lines.join(QLatin1Char('\n'));
+}
+
+bool UsageBlock::onResetTime(const QPointF &pos) const
+{
+    return std::any_of(m_resetRects.cbegin(), m_resetRects.cend(), [&pos](const QRectF &r) {
+        return r.contains(pos);
+    });
+}
+
+void UsageBlock::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() != Qt::LeftButton || !onResetTime(event->position())) {
+        return QWidget::mousePressEvent(event);
+    }
+    m_timeLeft = !m_timeLeft;
+    KConfigGroup g = m_config->state()->group(QStringLiteral("Usage"));
+    g.writeEntry("ShowTimeLeft", m_timeLeft);
+    g.sync();
+    update();
+}
+
+void UsageBlock::mouseMoveEvent(QMouseEvent *event)
+{
+    if (onResetTime(event->position())) {
+        setCursor(Qt::PointingHandCursor);
+    } else {
+        unsetCursor();
+    }
+    QWidget::mouseMoveEvent(event);
 }
 
 bool UsageBlock::event(QEvent *event)

@@ -172,7 +172,9 @@ to the pane. No sound.
 For every account a block with the account badge and name, then one line
 for the 5 hour and one for the 7 day limit. Each line has a bar in the
 account colour, the percent (orange from 80, red from 95) and the reset
-time. When no pane of an account is open, its bars are dimmed and its name
+time. A click on any reset time switches all of them between the clock time
+("04:30") and the time left ("2h 15m"), and the choice is kept for the next
+start. When no pane of an account is open, its bars are dimmed and its name
 row says from when the numbers are.
 
 * A small helper, `konvoy-usage` (Python, standard library only), collects
