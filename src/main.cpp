@@ -112,6 +112,10 @@ int main(int argc, char **argv)
         });
     }
 
+    // Without --open the panes of the last run come back.
+    if (parser.values(openOption).isEmpty()) {
+        window.restoreSession();
+    }
     for (const QString &spec : parser.values(openOption)) {
         const qsizetype colon = spec.indexOf(QLatin1Char(':'));
         if (colon <= 0) {

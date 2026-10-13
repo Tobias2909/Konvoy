@@ -16,12 +16,45 @@
 #include <QSplitter>
 #include <QTimer>
 
+#include <KConfigGroup>
 #include <KNotification>
+#include <KWindowConfig>
 #include <KWindowSystem>
+
+#include <QWindow>
 
 namespace
 {
 constexpr int sidebarWidth = 290;
+constexpr int sidebarMinWidth = 230;
+constexpr int sidebarMaxWidth = 640;
+
+// Slot sizes as "row heights;widths of row 1;widths of row 2", numbers split by commas.
+QString encodeSizes(const QList<QList<int>> &sizes)
+{
+    QStringList parts;
+    for (const QList<int> &list : sizes) {
+        QStringList numbers;
+        for (int n : list) {
+            numbers.append(QString::number(n));
+        }
+        parts.append(numbers.join(QLatin1Char(',')));
+    }
+    return parts.join(QLatin1Char(';'));
+}
+
+QList<QList<int>> decodeSizes(const QString &text)
+{
+    QList<QList<int>> sizes;
+    for (const QString &part : text.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+        QList<int> list;
+        for (const QString &n : part.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+            list.append(qMax(1, n.toInt()));
+        }
+        sizes.append(list);
+    }
+    return sizes;
+}
 
 QString describe(const Pane *pane)
 {
@@ -41,7 +74,7 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0);
 
     m_split = new QSplitter(Qt::Horizontal, this);
-    m_split->setHandleWidth(1);
+    m_split->setHandleWidth(4);
     m_split->setChildrenCollapsible(false);
     m_usage = new UsageModel(this);
     m_usage->startHelper(config);
@@ -52,7 +85,24 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
     m_split->setStretchFactor(0, 0);
     m_split->setStretchFactor(1, 1);
     m_split->setSizes({sidebarWidth, 1600});
+    m_sidebar->setMinimumWidth(sidebarMinWidth);
+    m_sidebar->setMaximumWidth(sidebarMaxWidth);
     layout->addWidget(m_split);
+
+    // The layout is saved a moment after it changes and once more on close.
+    m_saveTimer = new QTimer(this);
+    m_saveTimer->setSingleShot(true);
+    m_saveTimer->setInterval(1000);
+    connect(m_saveTimer, &QTimer::timeout, this, &MainWindow::saveSession);
+    connect(m_split, &QSplitter::splitterMoved, this, [this] {
+        if (!m_sidebar->isCollapsed()) {
+            m_sidebarWidth = m_split->sizes().value(0, m_sidebarWidth);
+        }
+        scheduleSave();
+    });
+    connect(m_grid, &PaneGrid::sizesChanged, this, &MainWindow::scheduleSave);
+    connect(m_grid, &PaneGrid::focusModeChanged, this, &MainWindow::scheduleSave);
+    connect(m_grid, &PaneGrid::panesChanged, this, &MainWindow::scheduleSave);
 
     m_grid->setColumns(config->columns());
     m_sidebar->setColumns(config->columns());
@@ -66,6 +116,10 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
         m_sidebar->setColumns(columns);
     });
     connect(m_sidebar, &Sidebar::paneCloseRequested, this, &MainWindow::closePane);
+    connect(m_sidebar, &Sidebar::paneMoved, this, [this](Pane *pane, int index) {
+        m_grid->movePaneTo(pane, index);
+    });
+    connect(m_sidebar, &Sidebar::collapseRequested, this, &MainWindow::setSidebarCollapsed);
     connect(m_sidebar, &Sidebar::paneClicked, this, [this](Pane *pane) {
         makeCurrent(pane);
         pane->focusTerminal();
@@ -140,17 +194,21 @@ void MainWindow::setupShortcuts()
 
 void MainWindow::newPane()
 {
-    NewPaneDialog dialog(m_config, m_usage, this);
+    QStringList open;
+    for (const Pane *pane : m_grid->panes()) {
+        open.append(pane->sessionId());
+    }
+    NewPaneDialog dialog(m_config, m_usage, open, this);
     if (dialog.exec() != QDialog::Accepted) {
         if (m_grid->current()) {
             m_grid->current()->focusTerminal();
         }
         return;
     }
-    openPane(dialog.accountKey(), dialog.folder());
+    openPane(dialog.accountKey(), dialog.folder(), dialog.sessionId());
 }
 
-Pane *MainWindow::openPane(const QString &accountKey, const QString &folder)
+Pane *MainWindow::openPane(const QString &accountKey, const QString &folder, const QString &resumeSession)
 {
     const Account *account = m_config->account(accountKey);
     if (!account) {
@@ -159,7 +217,7 @@ Pane *MainWindow::openPane(const QString &accountKey, const QString &folder)
     }
     const QString dir = QDir::cleanPath(Config::expandHome(folder));
     m_config->addRecentFolder(dir);
-    auto *pane = new Pane(m_config, *account, dir, m_grid);
+    auto *pane = new Pane(m_config, *account, dir, resumeSession, m_grid);
     adoptPane(pane);
     return pane;
 }
@@ -170,6 +228,13 @@ void MainWindow::adoptPane(Pane *pane)
     connect(pane, &Pane::shortcutCheck, this, &MainWindow::onShortcutCheck);
     connect(pane, &Pane::closeRequested, this, &MainWindow::closePane);
     connect(pane, &Pane::stateChanged, this, &MainWindow::onPaneState);
+    connect(pane, &Pane::sessionChanged, this, &MainWindow::scheduleSave);
+    connect(pane, &Pane::paneDropped, this, [this, pane](const QString &draggedId) {
+        if (Pane *dragged = paneById(draggedId)) {
+            m_grid->swapPanes(dragged, pane);
+            makeCurrent(dragged);
+        }
+    });
     connect(pane, &QObject::destroyed, this, [this, pane] {
         if (QPointer<KNotification> n = m_notifications.take(pane)) {
             n->close();
@@ -372,5 +437,121 @@ void MainWindow::closeEvent(QCloseEvent *event)
             return;
         }
     }
+    // Saved before the panes go: their shells end with the window and would leave
+    // an empty layout behind.
+    saveSession();
+    m_closing = true;
     event->accept();
+}
+
+Pane *MainWindow::paneById(const QString &id) const
+{
+    for (Pane *pane : m_grid->panes()) {
+        if (pane->id() == id) {
+            return pane;
+        }
+    }
+    return nullptr;
+}
+
+void MainWindow::setSidebarCollapsed(bool collapsed)
+{
+    if (collapsed == m_sidebar->isCollapsed()) {
+        return;
+    }
+    const int total = m_split->width();
+    if (collapsed) {
+        // Before the window is laid out the splitter has no real width yet.
+        const int width = m_split->sizes().value(0, 0);
+        if (m_sidebar->isVisible() && width >= sidebarMinWidth) {
+            m_sidebarWidth = width;
+        }
+        m_sidebar->setCollapsed(true);
+        m_sidebar->setFixedWidth(Sidebar::collapsedWidth);
+    } else {
+        m_sidebar->setCollapsed(false);
+        m_sidebar->setMinimumWidth(sidebarMinWidth);
+        m_sidebar->setMaximumWidth(sidebarMaxWidth);
+        m_split->setSizes({m_sidebarWidth, qMax(1, total - m_sidebarWidth)});
+    }
+    scheduleSave();
+}
+
+void MainWindow::scheduleSave()
+{
+    if (!m_restoring && !m_closing) {
+        m_saveTimer->start();
+    }
+}
+
+void MainWindow::saveSession()
+{
+    if (m_restoring || m_closing) {
+        return;
+    }
+    m_saveTimer->stop();
+    KSharedConfigPtr state = m_config->state();
+    for (const QString &group : state->groupList()) {
+        if (group.startsWith(QLatin1String("Pane "))) {
+            state->deleteGroup(group);
+        }
+    }
+    const QList<Pane *> &panes = m_grid->panes();
+    KConfigGroup layout = state->group(QStringLiteral("Layout"));
+    layout.writeEntry("Panes", int(panes.size()));
+    layout.writeEntry("Current", int(panes.indexOf(m_grid->current())));
+    layout.writeEntry("FocusMode", m_grid->focusMode());
+    layout.writeEntry("Slots", encodeSizes(m_grid->slotSizes()));
+    layout.writeEntry("SidebarWidth", m_sidebarWidth);
+    layout.writeEntry("SidebarCollapsed", m_sidebar->isCollapsed());
+    if (windowHandle()) {
+        KWindowConfig::saveWindowSize(windowHandle(), layout);
+    }
+    for (int i = 0; i < panes.size(); ++i) {
+        KConfigGroup g = state->group(QStringLiteral("Pane %1").arg(i));
+        g.writeEntry("Account", panes.at(i)->account().key);
+        g.writeEntry("Folder", Config::collapseHome(panes.at(i)->folder()));
+        g.writeEntry("Session", panes.at(i)->sessionId());
+    }
+    state->sync();
+}
+
+void MainWindow::restoreSession()
+{
+    const KConfigGroup layout = m_config->state()->group(QStringLiteral("Layout"));
+    m_restoring = true;
+    create();
+    KWindowConfig::restoreWindowSize(windowHandle(), layout);
+    resize(windowHandle()->size());
+
+    m_sidebarWidth = qBound(sidebarMinWidth, layout.readEntry("SidebarWidth", sidebarWidth), sidebarMaxWidth);
+    m_split->setSizes({m_sidebarWidth, qMax(1, width() - m_sidebarWidth)});
+
+    const int count = layout.readEntry("Panes", 0);
+    for (int i = 0; i < count; ++i) {
+        const KConfigGroup g = m_config->state()->group(QStringLiteral("Pane %1").arg(i));
+        const QString folder = g.readEntry("Folder", QString());
+        QString key = g.readEntry("Account", QString());
+        if (!m_config->account(key)) {
+            key = m_config->accounts().first().key; // the account is gone from the config
+        }
+        if (!folder.isEmpty()) {
+            openPane(key, folder, g.readEntry("Session", QString()));
+        }
+    }
+    // Slot sizes only stick once the window has its size; before that the panes'
+    // minimum sizes even them out.
+    const QList<QList<int>> sizes = decodeSizes(layout.readEntry("Slots", QString()));
+    QTimer::singleShot(0, this, [this, sizes] {
+        m_grid->setSlotSizes(sizes);
+    });
+    const QList<Pane *> &panes = m_grid->panes();
+    const int current = layout.readEntry("Current", 0);
+    if (current >= 0 && current < panes.size()) {
+        makeCurrent(panes.at(current));
+        panes.at(current)->focusTerminal();
+    }
+    m_grid->setFocusMode(layout.readEntry("FocusMode", false));
+    m_restoring = false;
+    setSidebarCollapsed(layout.readEntry("SidebarCollapsed", false));
 }

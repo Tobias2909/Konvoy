@@ -39,6 +39,10 @@ public:
     QString usageExtraCommand() const;  // optional, adds fields such as resets
     int usageExtraInterval() const;
 
+    // Window layout and panes of the last run: konvoystaterc in the XDG state folder,
+    // or "<file>.state" next to a config given with --config.
+    KSharedConfigPtr state() const { return m_state; }
+
     static QString expandHome(const QString &path);
     static QString collapseHome(const QString &path);
 
@@ -48,5 +52,6 @@ private:
     void writeFolders(const char *key, const QStringList &folders);
 
     KSharedConfigPtr m_config;
+    KSharedConfigPtr m_state;
     QList<Account> m_accounts;
 };

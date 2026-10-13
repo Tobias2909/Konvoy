@@ -8,6 +8,8 @@
 
 class UsageModel;
 class QButtonGroup;
+class QComboBox;
+class QTimer;
 class QDialogButtonBox;
 class QLineEdit;
 
@@ -50,10 +52,12 @@ class NewPaneDialog : public QDialog
 {
     Q_OBJECT
 public:
-    NewPaneDialog(Config *config, const UsageModel *usage, QWidget *parent = nullptr);
+    // openSessions: chats already running in a pane, which cannot be continued twice.
+    NewPaneDialog(Config *config, const UsageModel *usage, const QStringList &openSessions, QWidget *parent = nullptr);
 
     QString accountKey() const;
     QString folder() const;
+    QString sessionId() const; // empty for a new chat
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -62,10 +66,14 @@ private:
     void fillFolders(const QString &select);
     void togglePin(const QString &folder);
     void updateOk();
+    void fillChats();
 
     Config *m_config;
     QButtonGroup *m_accounts;
     FolderList *m_folders;
     QLineEdit *m_path;
+    QComboBox *m_chats;
+    QTimer *m_chatsTimer;
+    QStringList m_openSessions;
     QDialogButtonBox *m_buttons;
 };

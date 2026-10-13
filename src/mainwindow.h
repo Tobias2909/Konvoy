@@ -23,8 +23,11 @@ public:
     explicit MainWindow(Config *config, QWidget *parent = nullptr);
     ~MainWindow() override;
 
-    // Opens a pane without the dialog (command line --open).
-    Pane *openPane(const QString &accountKey, const QString &folder);
+    // Opens a pane without the dialog (command line --open, restore). With a session id
+    // the pane continues that chat.
+    Pane *openPane(const QString &accountKey, const QString &folder, const QString &resumeSession = QString());
+    // Reopens the panes of the last run with their layout and continues their chats.
+    void restoreSession();
 
 public Q_SLOTS:
     void newPane();
@@ -37,6 +40,10 @@ protected:
 
 private:
     void setupShortcuts();
+    void scheduleSave();
+    void saveSession();
+    void setSidebarCollapsed(bool collapsed);
+    Pane *paneById(const QString &id) const;
     void adoptPane(Pane *pane);
     void makeCurrent(Pane *pane);
     void onFocusChanged(QWidget *old, QWidget *now);
@@ -54,4 +61,8 @@ private:
     PaneGrid *m_grid;
     QTimer *m_spinner;
     QHash<Pane *, QPointer<KNotification>> m_notifications;
+    QTimer *m_saveTimer;
+    bool m_restoring = false;
+    bool m_closing = false;
+    int m_sidebarWidth = 290;
 };

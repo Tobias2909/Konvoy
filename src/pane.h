@@ -15,6 +15,7 @@ class QKeyEvent;
 class Pane;
 
 // Slim bar above each terminal: account badge, folder, chat title, state icon.
+// Dragging it onto another pane swaps the two.
 class PaneHeader : public QWidget
 {
     Q_OBJECT
@@ -30,10 +31,14 @@ Q_SIGNALS:
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
     Pane *m_pane;
     QRectF m_restartRect;
+    QPoint m_pressPos;
+    bool m_pressed = false;
 };
 
 // One Claude Code session: a real Konsole terminal running the account's command
@@ -42,7 +47,12 @@ class Pane : public QWidget
 {
     Q_OBJECT
 public:
-    Pane(const Config *config, const Account &account, const QString &folder, QWidget *parent = nullptr);
+    // With a session id the pane continues that chat instead of starting a new one.
+    Pane(const Config *config, const Account &account, const QString &folder, const QString &resumeSession = QString(), QWidget *parent = nullptr);
+
+    // Drag and drop of a header carries the pane id in this format.
+    static const QString mimeType;
+    static bool isSessionId(const QString &id);
     ~Pane() override;
 
     QString id() const { return m_id; }
@@ -74,6 +84,10 @@ public:
 
 Q_SIGNALS:
     void changed(Pane *pane);
+    // Account or chat changed: what a restart needs to continue this pane.
+    void sessionChanged();
+    // Another pane's header was dropped here.
+    void paneDropped(const QString &draggedId);
     void stateChanged(Pane *pane, PaneState previous);
     void terminalClosed(Pane *pane);
     void closeRequested(Pane *pane);
@@ -84,9 +98,14 @@ private Q_SLOTS:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
 private:
-    void start(const QString &shell);
+    void start(const QString &shell, const QString &resumeSession);
+    void setAccount(const Account &account);
     void releaseReservedShortcuts();
     void adoptSession();
     void setCaption(const QString &caption);
@@ -109,6 +128,7 @@ private:
     bool m_current = false;
 
     PaneHeader *m_header = nullptr;
+    QWidget *m_dropOverlay = nullptr;
     QPointer<KParts::ReadOnlyPart> m_part;
     TerminalInterface *m_terminal = nullptr;
     QString m_sessionPath; // D-Bus path of the Konsole session inside this process

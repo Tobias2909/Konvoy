@@ -9,14 +9,19 @@
 #include <kde_terminal_interface.h>
 
 #include <QAction>
+#include <QApplication>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDateTime>
 #include <QDir>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFile>
 #include <QFontMetrics>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMimeData>
 #include <QPainter>
 #include <QRegularExpression>
 #include <QFileSystemWatcher>
@@ -149,6 +154,50 @@ QList<qint64> descendants(qint64 root, QHash<qint64, QString> *names)
 }
 }
 
+// Shown over a pane while another pane's header is dragged onto it.
+class DropOverlay : public QWidget
+{
+public:
+    explicit DropOverlay(QWidget *parent)
+        : QWidget(parent)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        hide();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.fillRect(rect(), Theme::withAlpha(Theme::accent(), 0.28));
+        p.setPen(QPen(Theme::accent(), 3));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(rect()).adjusted(1.5, 1.5, -1.5, -1.5));
+        QFont f = font();
+        f.setPointSizeF(f.pointSizeF() + 3);
+        f.setWeight(QFont::DemiBold);
+        p.setFont(f);
+        const QString label = QStringLiteral("Swap with this pane");
+        const QFontMetrics fm(f);
+        const QRectF pill = QRectF(0, 0, fm.horizontalAdvance(label) + 36, fm.height() + 18).translated(QRectF(rect()).center() - QPointF((fm.horizontalAdvance(label) + 36) / 2.0, (fm.height() + 18) / 2.0));
+        p.setPen(Qt::NoPen);
+        p.setBrush(Theme::accent());
+        p.drawRoundedRect(pill, pill.height() / 2, pill.height() / 2);
+        p.setPen(Qt::white);
+        p.drawText(pill, Qt::AlignCenter, label);
+    }
+};
+
+const QString Pane::mimeType = QStringLiteral("application/x-konvoy-pane");
+
+bool Pane::isSessionId(const QString &id)
+{
+    // Ids end up in a shell command line, so only the uuid characters pass.
+    static const QRegularExpression uuid(QStringLiteral("^[0-9a-fA-F-]{8,64}$"));
+    return uuid.match(id).hasMatch();
+}
+
 // ---------------------------------------------------------------- PaneHeader
 
 PaneHeader::PaneHeader(Pane *pane)
@@ -226,13 +275,37 @@ void PaneHeader::mousePressEvent(QMouseEvent *event)
     } else if (m_restartRect.contains(event->position())) {
         Q_EMIT restartClicked();
     } else {
+        m_pressed = event->button() == Qt::LeftButton;
+        m_pressPos = event->position().toPoint();
         Q_EMIT clicked();
     }
 }
 
+void PaneHeader::mouseMoveEvent(QMouseEvent *event)
+{
+    if (!m_pressed || (event->position().toPoint() - m_pressPos).manhattanLength() < QApplication::startDragDistance()) {
+        return;
+    }
+    m_pressed = false;
+    auto *mime = new QMimeData;
+    mime->setData(Pane::mimeType, m_pane->id().toUtf8());
+    auto *drag = new QDrag(this);
+    drag->setMimeData(mime);
+    drag->setPixmap(grab());
+    drag->setHotSpot(m_pressPos);
+    setCursor(Qt::ClosedHandCursor);
+    drag->exec(Qt::MoveAction);
+    setCursor(Qt::PointingHandCursor);
+}
+
+void PaneHeader::mouseReleaseEvent(QMouseEvent *)
+{
+    m_pressed = false;
+}
+
 // ---------------------------------------------------------------- Pane
 
-Pane::Pane(const Config *config, const Account &account, const QString &folder, QWidget *parent)
+Pane::Pane(const Config *config, const Account &account, const QString &folder, const QString &resumeSession, QWidget *parent)
     : QWidget(parent)
     , m_config(config)
     , m_id(QUuid::createUuid().toString(QUuid::WithoutBraces))
@@ -277,7 +350,9 @@ Pane::Pane(const Config *config, const Account &account, const QString &folder, 
         Q_EMIT terminalClosed(this);
     });
 
-    start(config->shell());
+    setAcceptDrops(true);
+    m_dropOverlay = new DropOverlay(this);
+    start(config->shell(), isSessionId(resumeSession) ? resumeSession : QString());
     // Once more after the first event loop turn, for actions Konsole adds late.
     // Key presses in the terminal tell when the user answers a dialog.
     QTimer::singleShot(0, this, [this] {
@@ -343,8 +418,13 @@ void Pane::releaseReservedShortcuts()
     }
 }
 
-void Pane::start(const QString &shell)
+void Pane::start(const QString &shell, const QString &resumeSession)
 {
+    QString command = m_account.command;
+    if (!resumeSession.isEmpty()) {
+        command += QStringLiteral(" --resume ") + resumeSession;
+        m_sessionId = resumeSession;
+    }
     // Konsole expands $VARIABLES in a program's arguments with Konvoy's own
     // environment, so the pane's settings travel as environment variables to a
     // helper that takes no arguments. The helper starts the account command in an
@@ -354,7 +434,7 @@ void Pane::start(const QString &shell)
         {QByteArrayLiteral("KONVOY_PANE"), m_id},
         {QByteArrayLiteral("KONVOY_DIR"), m_folder},
         {QByteArrayLiteral("KONVOY_SHELL"), shell},
-        {QByteArrayLiteral("KONVOY_COMMAND"), m_account.command},
+        {QByteArrayLiteral("KONVOY_COMMAND"), command},
     };
     for (const auto &[name, value] : vars) {
         qputenv(name.constData(), value.toLocal8Bit());
@@ -467,15 +547,14 @@ void Pane::applyEvent(const QStringList &fields)
     const QString session = fields.value(2);
     const QString tool = fields.value(3);
     const QString type = fields.value(4);
-    if (!session.isEmpty()) {
+    if (!session.isEmpty() && session != m_sessionId) {
         m_sessionId = session;
+        Q_EMIT sessionChanged();
     }
     if (fields.size() > 5) {
         const Account *account = m_config->accountForConfigDir(fields.at(5));
         if (account && account->key != m_account.key) {
-            m_account = *account;
-            m_header->update();
-            Q_EMIT changed(this);
+            setAccount(*account);
         }
     }
 
@@ -566,6 +645,51 @@ void Pane::recompute()
         }
     }
     setState(s);
+}
+
+void Pane::setAccount(const Account &account)
+{
+    m_account = account;
+    m_header->update();
+    Q_EMIT changed(this);
+    Q_EMIT sessionChanged();
+}
+
+void Pane::dragEnterEvent(QDragEnterEvent *event)
+{
+    const QByteArray id = event->mimeData()->data(mimeType);
+    if (id.isEmpty() || QString::fromUtf8(id) == m_id) {
+        event->ignore();
+        return;
+    }
+    event->acceptProposedAction();
+    m_dropOverlay->setGeometry(rect());
+    m_dropOverlay->raise();
+    m_dropOverlay->show();
+}
+
+void Pane::dragLeaveEvent(QDragLeaveEvent *)
+{
+    m_dropOverlay->hide();
+}
+
+void Pane::dropEvent(QDropEvent *event)
+{
+    m_dropOverlay->hide();
+    const QString id = QString::fromUtf8(event->mimeData()->data(mimeType));
+    if (id.isEmpty() || id == m_id) {
+        return;
+    }
+    event->acceptProposedAction();
+    Q_EMIT paneDropped(id);
+}
+
+void Pane::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    if (m_dropOverlay) {
+        m_dropOverlay->setGeometry(rect());
+    }
 }
 
 bool Pane::isBusy() const
@@ -691,9 +815,7 @@ void Pane::watchClaude()
         }
         const Account *account = m_config->accountForConfigDir(readEnvironmentVariable(pid, "CLAUDE_CONFIG_DIR"));
         if (account && account->key != m_account.key) {
-            m_account = *account;
-            m_header->update();
-            Q_EMIT changed(this);
+            setAccount(*account);
         }
         return;
     }

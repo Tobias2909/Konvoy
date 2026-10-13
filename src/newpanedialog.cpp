@@ -1,8 +1,12 @@
 #include "newpanedialog.h"
+#include "chats.h"
 #include "theme.h"
 #include "usage.h"
 
 #include <QButtonGroup>
+#include <QComboBox>
+#include <QStandardItemModel>
+#include <QTimer>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFileDialog>
@@ -114,9 +118,10 @@ void FolderList::mousePressEvent(QMouseEvent *event)
 
 // ---------------------------------------------------------------- NewPaneDialog
 
-NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, QWidget *parent)
+NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, const QStringList &openSessions, QWidget *parent)
     : QDialog(parent)
     , m_config(config)
+    , m_openSessions(openSessions)
 {
     setWindowTitle(QStringLiteral("New pane"));
     auto *layout = new QVBoxLayout(this);
@@ -138,6 +143,11 @@ NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, QWidget *p
     accountRow->addStretch();
     layout->addLayout(accountRow);
     connect(m_accounts, &QButtonGroup::buttonToggled, this, &NewPaneDialog::updateOk);
+    connect(m_accounts, &QButtonGroup::buttonToggled, this, [this](QAbstractButton *, bool checked) {
+        if (checked) {
+            m_chatsTimer->start();
+        }
+    });
 
     layout->addSpacing(6);
     layout->addWidget(sectionLabel(QStringLiteral("Folder"), this));
@@ -172,6 +182,19 @@ NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, QWidget *p
         }
     });
 
+    // The chats of the folder, read again shortly after the folder or account changes.
+    layout->addSpacing(6);
+    layout->addWidget(sectionLabel(QStringLiteral("Conversation"), this));
+    m_chats = new QComboBox(this);
+    m_chats->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    m_chats->setMinimumContentsLength(30);
+    layout->addWidget(m_chats);
+    m_chatsTimer = new QTimer(this);
+    m_chatsTimer->setSingleShot(true);
+    m_chatsTimer->setInterval(150);
+    connect(m_chatsTimer, &QTimer::timeout, this, &NewPaneDialog::fillChats);
+    connect(m_path, &QLineEdit::textChanged, m_chatsTimer, qOverload<>(&QTimer::start));
+
     m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     m_buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("Open"));
     layout->addWidget(m_buttons);
@@ -179,6 +202,7 @@ NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, QWidget *p
     connect(m_buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     fillFolders(config->lastFolder());
+    fillChats();
     updateOk();
     resize(560, sizeHint().height());
 }
@@ -193,6 +217,43 @@ QString NewPaneDialog::folder() const
 {
     const QString text = m_path->text().trimmed();
     return text.isEmpty() ? QString() : QDir::cleanPath(Config::expandHome(text));
+}
+
+QString NewPaneDialog::sessionId() const
+{
+    return m_chats->currentData().toString();
+}
+
+void NewPaneDialog::fillChats()
+{
+    // Before an account is chosen the chats of all accounts count; after that only
+    // the ones that account can continue.
+    QStringList dirs;
+    const QString key = accountKey();
+    for (const Account &account : m_config->accounts()) {
+        if (key.isEmpty() || account.key == key) {
+            dirs.append(account.configDir);
+        }
+    }
+    const QString keep = sessionId();
+    m_chats->clear();
+    m_chats->addItem(QIcon::fromTheme(QStringLiteral("document-new")), QStringLiteral("New chat"));
+    const QString f = folder();
+    if (f.isEmpty()) {
+        return;
+    }
+    auto *model = qobject_cast<QStandardItemModel *>(m_chats->model());
+    for (const Chat &chat : Chats::recent(dirs, f)) {
+        const bool open = m_openSessions.contains(chat.id);
+        m_chats->addItem(QIcon::fromTheme(QStringLiteral("dialog-messages")),
+                         QStringLiteral("%1 · %2%3").arg(chat.title, Chats::age(chat.modified), open ? QStringLiteral(" · open in a pane") : QString()),
+                         chat.id);
+        if (open && model) {
+            model->item(m_chats->count() - 1)->setEnabled(false);
+        }
+    }
+    const int again = m_chats->findData(keep);
+    m_chats->setCurrentIndex(again > 0 ? again : 0);
 }
 
 void NewPaneDialog::fillFolders(const QString &select)

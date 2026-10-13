@@ -16,11 +16,11 @@ and shows at a glance which of them is waiting for you.
 └──────────────┴────────────────────────┴────────────────────────┘
 ```
 
-* **Sidebar** on the left, 290 px by default. Its width can be dragged, and
-  it collapses to a 44 px strip that only shows the state icons, account
-  stripes and small usage bars. Top: buttons for new pane, overview/focus,
-  equal sizes and collapse. Middle: one card per pane. Bottom: the usage
-  block.
+* **Sidebar** on the left, 290 px by default. Its width can be dragged
+  (230 to 640 px), and it collapses to a 44 px strip that only shows the
+  state icons, account stripes and small usage bars. Top: buttons for new
+  pane, overview/focus, equal sizes and columns, and on the right collapse.
+  Middle: one card per pane. Bottom: the usage block.
 * **Pane cards**: a stripe in the state colour on the left, the state icon,
   the account badge, the folder, the state text with its duration and the
   `Alt` number on the first line, the chat title on the second. Panes that
@@ -56,9 +56,12 @@ hook reports the config dir it sees, and the pane follows.
   grid slots and are saved with the layout. Adding or removing a pane or
   changing the column count resets them to equal.
 * **Focus mode** shows one pane big. The others keep running, hidden.
-* **Reordering** by dragging a header bar onto another pane, by dragging
-  rows in the sidebar, or with `Ctrl+Shift+Left/Right`. All three change the
-  same order. Reordering swaps panes between slots, the slot sizes stay.
+* **Reordering** by dragging a header bar onto another pane (the two swap),
+  by pressing and holding a sidebar card until it lifts and dropping it at
+  another place (dragging it right away works too), or with
+  `Ctrl+Shift+arrows`. All of them change the same order. The slots keep
+  their sizes, only the panes move between them.
+* Focus mode keeps the overview sizes and gives them back when it ends.
 * Clicking a sidebar row focuses that pane. In focus mode it also becomes
   the big one.
 
@@ -80,8 +83,12 @@ Copy, paste and search come from the embedded Konsole terminal.
 * **Folder**: pinned folders first (a star pins or unpins, they keep the
   order they were pinned in), then recent folders, then a browse button.
   The last used folder is selected.
-* **Conversation**: new chat (default), or continue one of the recent chats
-  in that folder.
+* **Conversation**: new chat (default), or continue one of the 15 latest
+  chats in that folder, newest first, with their title and age. The list
+  comes from the chosen account's `projects` folder (all accounts' before
+  one is chosen). A chat's title is its `/rename` name, else Claude's own
+  title, else its last prompt, read from the end of the chat file. Chats
+  already open in a pane are listed but greyed out.
 
 ## States
 
@@ -205,8 +212,13 @@ row says from when the numbers are.
 
 * Closing a pane or the window asks first only while Claude works, waits
   for an answer or runs background tasks there. Middle click on a card or a header closes a pane.
-* On the next start Konvoy restores the panes with their order, sizes,
-  folders and accounts, and continues each chat with `claude --resume`.
+* On the next start Konvoy restores the panes with their order, slot sizes,
+  folders and accounts, and continues each chat with `--resume` and the
+  last session id the pane saw. Focus mode, the current pane, the sidebar
+  width and collapse and the window size come back too. The layout is saved
+  a second after each change and on close, in `konvoystaterc` in the XDG
+  state folder. A config given with `--config` keeps its own state next to
+  it, so test runs never reopen the real panes. `--open` skips the restore.
 
 ## Build steps
 

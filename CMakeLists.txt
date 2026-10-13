@@ -23,6 +23,7 @@ add_executable(konvoy
     src/mainwindow.cpp
     src/usage.cpp
     src/usageblock.cpp
+    src/chats.cpp
 )
 
 target_compile_definitions(konvoy PRIVATE
@@ -35,6 +36,7 @@ target_link_libraries(konvoy PRIVATE
     Qt6::DBus
     KF6::CoreAddons
     KF6::ConfigCore
+    KF6::ConfigGui
     KF6::Parts
     KF6::XmlGui
     KF6::DBusAddons

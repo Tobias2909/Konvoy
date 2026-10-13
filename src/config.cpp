@@ -21,6 +21,9 @@ Config::Config(const QString &file)
 {
     m_config = file.isEmpty() ? KSharedConfig::openConfig(QStringLiteral("konvoyrc"))
                               : KSharedConfig::openConfig(QFileInfo(file).absoluteFilePath(), KConfig::SimpleConfig);
+    // A test config keeps its own state, so it never reopens the real panes.
+    m_state = file.isEmpty() ? KSharedConfig::openStateConfig(QStringLiteral("konvoystaterc"))
+                             : KSharedConfig::openConfig(QFileInfo(file).absoluteFilePath() + QStringLiteral(".state"), KConfig::SimpleConfig);
     loadAccounts();
 }
 

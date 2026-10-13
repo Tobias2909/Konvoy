@@ -90,6 +90,18 @@ void PaneGrid::removePane(Pane *pane)
     Q_EMIT panesChanged();
 }
 
+void PaneGrid::reorder(const std::function<void()> &change, Pane *focus)
+{
+    const QList<QList<int>> sizes = slotSizes();
+    change();
+    rebuild();
+    setSlotSizes(sizes);
+    if (focus) {
+        focus->focusTerminal();
+    }
+    Q_EMIT panesChanged();
+}
+
 void PaneGrid::movePane(Pane *pane, int delta)
 {
     const qsizetype from = m_panes.indexOf(pane);
@@ -97,24 +109,75 @@ void PaneGrid::movePane(Pane *pane, int delta)
     if (from < 0 || to < 0 || to >= m_panes.size()) {
         return;
     }
-    // Swap places and keep every slot's size.
+    reorder([&] {
+        m_panes.swapItemsAt(from, to);
+    }, pane);
+}
+
+void PaneGrid::movePaneTo(Pane *pane, int index)
+{
+    const qsizetype from = m_panes.indexOf(pane);
+    if (from < 0 || index < 0 || index >= m_panes.size() || index == from) {
+        return;
+    }
+    reorder([&] {
+        m_panes.move(from, index);
+    }, pane);
+}
+
+void PaneGrid::swapPanes(Pane *a, Pane *b)
+{
+    const qsizetype i = m_panes.indexOf(a);
+    const qsizetype j = m_panes.indexOf(b);
+    if (i < 0 || j < 0 || i == j) {
+        return;
+    }
+    reorder([&] {
+        m_panes.swapItemsAt(i, j);
+    }, a);
+}
+
+QList<QList<int>> PaneGrid::slotSizes() const
+{
+    return m_focusMode ? m_overviewSizes : currentSlotSizes();
+}
+
+void PaneGrid::setSlotSizes(const QList<QList<int>> &sizes)
+{
+    if (m_focusMode) {
+        m_overviewSizes = sizes;
+    } else {
+        applySlotSizes(sizes);
+    }
+}
+
+QList<QList<int>> PaneGrid::currentSlotSizes() const
+{
     QList<QList<int>> sizes;
+    if (!m_rows) {
+        return sizes;
+    }
+    sizes.append(m_rows->sizes());
     for (QSplitter *row : std::as_const(m_rowSplitters)) {
         sizes.append(row->sizes());
     }
-    const QList<int> rowSizes = m_rows ? m_rows->sizes() : QList<int>();
-    m_panes.swapItemsAt(from, to);
-    rebuild();
-    if (m_rows && rowSizes.size() == m_rows->count()) {
-        m_rows->setSizes(rowSizes);
+    return sizes;
+}
+
+void PaneGrid::applySlotSizes(const QList<QList<int>> &sizes)
+{
+    // Sizes from another layout (other pane or column count) do not fit and are skipped.
+    if (!m_rows || sizes.isEmpty()) {
+        return;
     }
-    for (int i = 0; i < m_rowSplitters.size() && i < sizes.size(); ++i) {
-        if (sizes.at(i).size() == m_rowSplitters.at(i)->count()) {
-            m_rowSplitters.at(i)->setSizes(sizes.at(i));
+    if (sizes.first().size() == m_rows->count()) {
+        m_rows->setSizes(sizes.first());
+    }
+    for (int i = 0; i < m_rowSplitters.size() && i + 1 < sizes.size(); ++i) {
+        if (sizes.at(i + 1).size() == m_rowSplitters.at(i)->count()) {
+            m_rowSplitters.at(i)->setSizes(sizes.at(i + 1));
         }
     }
-    pane->focusTerminal();
-    Q_EMIT panesChanged();
 }
 
 void PaneGrid::movePaneVertically(Pane *pane, int rows)
@@ -147,8 +210,18 @@ void PaneGrid::setFocusMode(bool on)
     if (on == m_focusMode) {
         return;
     }
+    if (on) {
+        m_overviewSizes = currentSlotSizes();
+    }
     m_focusMode = on;
     applyFocusMode();
+    if (!on) {
+        if (m_overviewSizes.isEmpty()) {
+            equalizeSizes();
+        } else {
+            applySlotSizes(m_overviewSizes);
+        }
+    }
     if (m_current) {
         m_current->focusTerminal();
     }
@@ -166,12 +239,17 @@ void PaneGrid::setColumns(int columns)
 
 void PaneGrid::equalizeSizes()
 {
-    if (m_rows) {
-        setEqual(m_rows);
+    if (m_focusMode) {
+        m_overviewSizes.clear(); // equal once the overview comes back
+    } else {
+        if (m_rows) {
+            setEqual(m_rows);
+        }
+        for (QSplitter *row : std::as_const(m_rowSplitters)) {
+            setEqual(row);
+        }
     }
-    for (QSplitter *row : std::as_const(m_rowSplitters)) {
-        setEqual(row);
-    }
+    Q_EMIT sizesChanged();
 }
 
 void PaneGrid::rebuild()
@@ -193,8 +271,10 @@ void PaneGrid::rebuild()
 
     const int cols = effectiveColumns();
     m_rows = makeSplitter(Qt::Vertical, this);
+    connect(m_rows, &QSplitter::splitterMoved, this, &PaneGrid::sizesChanged);
     for (int i = 0; i < m_panes.size(); i += cols) {
         QSplitter *row = makeSplitter(Qt::Horizontal, m_rows);
+        connect(row, &QSplitter::splitterMoved, this, &PaneGrid::sizesChanged);
         for (int j = i; j < qMin(i + cols, int(m_panes.size())); ++j) {
             row->addWidget(m_panes.at(j));
             m_panes.at(j)->show();
@@ -204,7 +284,11 @@ void PaneGrid::rebuild()
     }
     layout()->addWidget(m_rows);
     m_rows->show();
-    equalizeSizes();
+    if (m_focusMode) {
+        m_overviewSizes.clear();
+    } else {
+        equalizeSizes();
+    }
     applyFocusMode();
 }
 
