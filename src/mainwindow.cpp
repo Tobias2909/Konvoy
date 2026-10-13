@@ -4,6 +4,7 @@
 #include "panegrid.h"
 #include "shortcuts.h"
 #include "sidebar.h"
+#include "usage.h"
 
 #include <QAction>
 #include <QApplication>
@@ -42,7 +43,9 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
     m_split = new QSplitter(Qt::Horizontal, this);
     m_split->setHandleWidth(1);
     m_split->setChildrenCollapsible(false);
-    m_sidebar = new Sidebar(m_split);
+    m_usage = new UsageModel(this);
+    m_usage->startHelper(config);
+    m_sidebar = new Sidebar(config, m_usage, m_split);
     m_grid = new PaneGrid(m_split);
     m_split->addWidget(m_sidebar);
     m_split->addWidget(m_grid);
@@ -137,7 +140,7 @@ void MainWindow::setupShortcuts()
 
 void MainWindow::newPane()
 {
-    NewPaneDialog dialog(m_config, this);
+    NewPaneDialog dialog(m_config, m_usage, this);
     if (dialog.exec() != QDialog::Accepted) {
         if (m_grid->current()) {
             m_grid->current()->focusTerminal();

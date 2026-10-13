@@ -148,6 +148,16 @@ void Config::setColumns(int columns)
     g.sync();
 }
 
+QString Config::usageExtraCommand() const
+{
+    return m_config->group(QStringLiteral("Usage")).readEntry("ExtraCommand", QString());
+}
+
+int Config::usageExtraInterval() const
+{
+    return m_config->group(QStringLiteral("Usage")).readEntry("ExtraInterval", 900);
+}
+
 QString Config::expandHome(const QString &path)
 {
     if (path == QLatin1String("~")) {

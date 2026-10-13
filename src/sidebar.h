@@ -3,7 +3,9 @@
 #include <QList>
 #include <QWidget>
 
+class Config;
 class Pane;
+class UsageModel;
 class QToolButton;
 class QMenu;
 
@@ -41,7 +43,7 @@ class Sidebar : public QWidget
 {
     Q_OBJECT
 public:
-    explicit Sidebar(QWidget *parent = nullptr);
+    Sidebar(const Config *config, const UsageModel *usage, QWidget *parent = nullptr);
 
     void setPanes(const QList<Pane *> &panes);
     void refresh();

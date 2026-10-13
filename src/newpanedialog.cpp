@@ -1,5 +1,6 @@
 #include "newpanedialog.h"
 #include "theme.h"
+#include "usage.h"
 
 #include <QButtonGroup>
 #include <QDialogButtonBox>
@@ -113,7 +114,7 @@ void FolderList::mousePressEvent(QMouseEvent *event)
 
 // ---------------------------------------------------------------- NewPaneDialog
 
-NewPaneDialog::NewPaneDialog(Config *config, QWidget *parent)
+NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, QWidget *parent)
     : QDialog(parent)
     , m_config(config)
 {
@@ -127,6 +128,10 @@ NewPaneDialog::NewPaneDialog(Config *config, QWidget *parent)
     m_accounts->setExclusive(true);
     for (const Account &account : config->accounts()) {
         auto *button = new AccountButton(account, this);
+        button->setUsageText(usage->shortText(account.key));
+        connect(usage, &UsageModel::changed, button, [button, usage] {
+            button->setUsageText(usage->shortText(button->account().key));
+        });
         m_accounts->addButton(button);
         accountRow->addWidget(button);
     }

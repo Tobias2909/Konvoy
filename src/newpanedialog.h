@@ -6,11 +6,12 @@
 
 #include "config.h"
 
+class UsageModel;
 class QButtonGroup;
 class QDialogButtonBox;
 class QLineEdit;
 
-// One account in the dialog: badge, name and (from the usage fetcher) its usage.
+// One account in the dialog: badge, name and its usage.
 class AccountButton : public QAbstractButton
 {
     Q_OBJECT
@@ -49,7 +50,7 @@ class NewPaneDialog : public QDialog
 {
     Q_OBJECT
 public:
-    NewPaneDialog(Config *config, QWidget *parent = nullptr);
+    NewPaneDialog(Config *config, const UsageModel *usage, QWidget *parent = nullptr);
 
     QString accountKey() const;
     QString folder() const;

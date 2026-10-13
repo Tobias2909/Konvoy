@@ -24,3 +24,9 @@ ConfigDir=~/.claude-work
 [Folders]
 # Always listed first in the new pane dialog. The star in the dialog edits this.
 Pinned=~/projects/app,~/projects/site
+
+[Usage]
+# The usage helper runs while Konvoy does. It sends no requests and only reads
+# what Claude Code reports (see docs/design.md, "Usage block").
+#   ExtraCommand   optional, prints extra fields per account as JSON
+#   ExtraInterval  seconds between two runs of the extra command, 900 by default

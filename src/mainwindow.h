@@ -10,6 +10,7 @@
 class Pane;
 class PaneGrid;
 class Sidebar;
+class UsageModel;
 class KNotification;
 class QKeyEvent;
 class QSplitter;
@@ -48,6 +49,7 @@ private:
 
     Config *m_config;
     QSplitter *m_split;
+    UsageModel *m_usage;
     Sidebar *m_sidebar;
     PaneGrid *m_grid;
     QTimer *m_spinner;

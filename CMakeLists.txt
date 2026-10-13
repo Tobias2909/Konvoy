@@ -21,6 +21,8 @@ add_executable(konvoy
     src/sidebar.cpp
     src/newpanedialog.cpp
     src/mainwindow.cpp
+    src/usage.cpp
+    src/usageblock.cpp
 )
 
 target_compile_definitions(konvoy PRIVATE
@@ -41,7 +43,7 @@ target_link_libraries(konvoy PRIVATE
 )
 
 install(TARGETS konvoy ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
-install(PROGRAMS hooks/konvoy-hook hooks/konvoy-hooks DESTINATION ${KDE_INSTALL_LIBEXECDIR})
+install(PROGRAMS hooks/konvoy-hook hooks/konvoy-hooks usage/konvoy-usage usage/konvoy-statusline DESTINATION ${KDE_INSTALL_LIBEXECDIR})
 install(FILES konvoy.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
 # The menu entry gets the full path: a prefix like ~/.local/bin is often only in the
 # shell's PATH, not in the desktop session's.

@@ -40,7 +40,7 @@ Konvoy works with any number of Claude Code accounts, one or more. Nothing
 in the code assumes a fixed count. Each account is an entry in the config
 with a letter, a colour, the command that starts it and its config dir
 (`CLAUDE_CONFIG_DIR`). Accounts without a colour get the next one from a
-built in palette. The sidebar, the new pane dialog and the usage fetcher
+built in palette. The sidebar, the new pane dialog and the usage helper
 all follow the list. A pane runs an interactive shell
 that starts the account command, so shell functions and wrappers around
 `claude` keep working. The account of a pane can change while it runs, the
@@ -165,20 +165,41 @@ to the pane. No sound.
 For every account a block with the account badge and name, then one line
 for the 5 hour and one for the 7 day limit. Each line has a bar in the
 account colour, the percent (orange from 80, red from 95) and the reset
-time. A warning line shows when the login has expired, and the bars are
-dimmed then because the numbers are the last known ones.
+time. When no pane of an account is open, its bars are dimmed and its name
+row says from when the numbers are.
 
-* A small fetcher (Python, standard library only) reads the usage with each
-  account's own login, the same numbers Claude Code's `/usage` shows. It
-  writes them to `$XDG_RUNTIME_DIR/konvoy/usage.json`.
-* It runs only while something shows the numbers, and fetches every 120
-  seconds. The usage service rate limits bursts, and running sessions share
-  that budget.
-* It never refreshes a login itself. Claude Code rotates refresh tokens
-  under its own lock, so a second refresher could log the account out.
-* **The Konvoy window has no network code.** It only reads that file.
-* An optional external command can add extra fields to the same file. The
-  window shows them if present.
+* A small helper, `konvoy-usage` (Python, standard library only), collects
+  the numbers and writes them to `$XDG_RUNTIME_DIR/konvoy/usage.json`. **It
+  sends no requests, and neither does the window.** Every number comes from
+  Claude Code itself.
+* Konvoy starts it and stops it again, so it runs only while Konvoy shows the
+  numbers.
+* **Status line handoff.** Claude Code hands its status line the current 5
+  hour and 7 day numbers after each request. `konvoy-statusline` takes that
+  same input, and in a Konvoy pane (`KONVOY_PANE` is set) it writes the
+  numbers to `$XDG_RUNTIME_DIR/konvoy/statusline/$KONVOY_PANE.json`, only
+  when they change:
+
+  ```
+  {"config_dir": "/home/me/.claude",
+   "five_hour": {"percent": 32, "resets_at": 1791945000},
+   "seven_day": {"percent": 68, "resets_at": 1792393200}}
+  ```
+
+  `config_dir` is the session's `CLAUDE_CONFIG_DIR`, or `~/.claude` when it is
+  unset. Konvoy removes a pane's file when the pane closes, and all of them
+  when it starts, so while one exists for an account a pane of it is open and
+  its numbers count as live.
+* **Saved numbers.** Without such a file the helper takes the numbers Claude
+  Code saved in its own state file (`cachedUsageUtilization`), or the last
+  ones it had. They can be hours old, hence the dimmed bars and the time.
+* **Extra command.** `[Usage] ExtraCommand` runs every `ExtraInterval`
+  seconds (900 by default). The file keeps when it last ran, so restarting
+  Konvoy does not run it again early. It prints
+  `{"accounts": {"<config dir>": {...}}}`, and those fields land under `extra`
+  for that account. The window shows `"resets": {"available": N,
+  "expires_at": EPOCH}` as "★ 1 reset · expires 22 Oct 18:00".
+* The header says when the file itself has stopped updating.
 
 ## Closing and restoring
 
@@ -194,10 +215,10 @@ dimmed then because the numbers are the last known ones.
 | 0 | sidebar mockup at real size |
 | 1 | window, panes, grid and focus mode, header bars, new pane dialog, shortcuts, close warning |
 | 2 | state tracking, hooks setup, sidebar rows, notifications |
-| 3 | usage fetcher and usage block |
+| 3 | usage block |
 | 4 | drag resize and equal sizes, drag reorder, sidebar width and collapse, restore, continue chat list |
 
 ## Technology
 
 C++ with Qt 6 and KDE Frameworks 6, built with CMake and extra-cmake-modules.
-The usage fetcher and the hook script are separate small programs.
+The usage helper and the hook script are separate small programs.

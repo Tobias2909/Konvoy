@@ -18,6 +18,8 @@ konvoy --install-hooks
 
 The last step adds Konvoy's hooks to the Claude Code settings of every account in your config and shows them before it writes. Your other hooks stay as they are. `konvoy --remove-hooks` takes Konvoy's hooks out again.
 
+Konvoy sends no requests of its own. The usage numbers are the ones Claude Code hands to its status line after every answer, and `konvoy-statusline` passes them on when your status line gives it the same input. An account without an open pane shows the numbers Claude Code saved last. [docs/design.md](docs/design.md) shows how.
+
 ## License
 
 MIT

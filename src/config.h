@@ -35,6 +35,10 @@ public:
     int columns() const; // 0 = automatic
     void setColumns(int columns);
 
+    // [Usage]
+    QString usageExtraCommand() const;  // optional, adds fields such as resets
+    int usageExtraInterval() const;
+
     static QString expandHome(const QString &path);
     static QString collapseHome(const QString &path);
 

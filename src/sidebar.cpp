@@ -2,6 +2,7 @@
 #include "config.h"
 #include "pane.h"
 #include "theme.h"
+#include "usageblock.h"
 
 #include <QActionGroup>
 #include <QDateTime>
@@ -218,7 +219,7 @@ bool CardList::event(QEvent *event)
 
 // ---------------------------------------------------------------- Sidebar
 
-Sidebar::Sidebar(QWidget *parent)
+Sidebar::Sidebar(const Config *config, const UsageModel *usage, QWidget *parent)
     : QWidget(parent)
 {
     setAutoFillBackground(true);
@@ -281,6 +282,7 @@ Sidebar::Sidebar(QWidget *parent)
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     layout->addWidget(scroll, 1);
+    layout->addWidget(new UsageBlock(config, usage, this));
 
     // Durations on the cards ("4m") move on by themselves.
     auto *timer = new QTimer(this);

@@ -1,5 +1,6 @@
 #include "pane.h"
 #include "shortcuts.h"
+#include "usage.h"
 
 #include <KActionCollection>
 #include <KPluginFactory>
@@ -301,6 +302,8 @@ Pane::~Pane()
     if (!m_eventFile.isEmpty()) {
         QFile::remove(m_eventFile);
     }
+    // The status line of this pane's Claude reports its plan usage here.
+    QFile::remove(UsageModel::reportFolder() + QLatin1Char('/') + m_id + QStringLiteral(".json"));
     if (m_part) {
         disconnect(m_part, nullptr, this, nullptr);
         delete m_part;

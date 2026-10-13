@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Hands the plan usage from Claude Code's status line to Konvoy.
+
+Claude Code gives its status line command the current 5 hour and 7 day limits
+on stdin after each request. Pass that same input on to this script from your
+status line, for example
+
+    input=$(cat)
+    printf '%s' "$input" | ~/.local/lib/libexec/konvoy-statusline
+
+It prints nothing, so it can also be the whole status line command when you
+have none. Outside a Konvoy pane it does nothing. Inside one it writes the
+numbers to $XDG_RUNTIME_DIR/konvoy/statusline/$KONVOY_PANE.json, only when
+they change, where Konvoy's usage helper picks them up.
+"""
+
+import json
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+
+def window(limits, key):
+    win = limits.get(key)
+    if not isinstance(win, dict) or not isinstance(win.get("used_percentage"), (int, float)):
+        return None
+    resets = win.get("resets_at")
+    return {"percent": win["used_percentage"], "resets_at": resets if isinstance(resets, (int, float)) else None}
+
+
+def main():
+    pane = os.environ.get("KONVOY_PANE", "")
+    runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+    if not pane or not runtime or "/" in pane:
+        return 0
+    try:
+        data = json.load(sys.stdin)
+    except ValueError:
+        return 0
+    limits = data.get("rate_limits") if isinstance(data, dict) else None
+    if not isinstance(limits, dict):
+        return 0  # an API key session has no plan limits
+    report = {"config_dir": os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude"),
+              "five_hour": window(limits, "five_hour"), "seven_day": window(limits, "seven_day")}
+    if report["five_hour"] is None and report["seven_day"] is None:
+        return 0
+    folder = Path(runtime) / "konvoy" / "statusline"
+    path = folder / f"{pane}.json"
+    text = json.dumps(report, separators=(",", ":"))
+    try:
+        if path.read_text() == text:
+            return 0
+    except OSError:
+        pass
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=folder, prefix=".report.")
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
