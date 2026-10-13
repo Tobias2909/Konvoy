@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QProcess>
 #include <QProcessEnvironment>
 #include <QTimer>
 
@@ -51,12 +52,47 @@ int main(int argc, char **argv)
                                               QStringLiteral("Save a picture of the window after a few seconds and quit (for testing)."),
                                               QStringLiteral("file"));
     const QCommandLineOption delayOption(QStringLiteral("screenshot-delay"), QStringLiteral("Milliseconds before the test picture."), QStringLiteral("ms"), QStringLiteral("4000"));
+    const QCommandLineOption installHooksOption(QStringLiteral("install-hooks"),
+                                                QStringLiteral("Add Konvoy's hooks to every account's Claude Code settings. Other hooks stay."));
+    const QCommandLineOption removeHooksOption(QStringLiteral("remove-hooks"), QStringLiteral("Remove Konvoy's hooks again."));
+    const QCommandLineOption hooksStatusOption(QStringLiteral("hooks-status"), QStringLiteral("Show whether Konvoy's hooks are installed."));
+    const QCommandLineOption yesOption(QStringLiteral("yes"), QStringLiteral("With --install-hooks or --remove-hooks: do not ask."));
     parser.addOption(configOption);
     parser.addOption(delayOption);
+    parser.addOption(installHooksOption);
+    parser.addOption(removeHooksOption);
+    parser.addOption(hooksStatusOption);
+    parser.addOption(yesOption);
     parser.addOption(openOption);
     parser.addOption(screenshotOption);
     parser.process(app);
     about.processCommandLine(&parser);
+
+    if (parser.isSet(installHooksOption) || parser.isSet(removeHooksOption) || parser.isSet(hooksStatusOption)) {
+        const Config config(parser.value(configOption));
+        const QString libexec = QStringLiteral(KONVOY_LIBEXECDIR);
+        QStringList args{parser.isSet(installHooksOption)  ? QStringLiteral("install")
+                             : parser.isSet(removeHooksOption) ? QStringLiteral("remove")
+                                                               : QStringLiteral("status"),
+                         QStringLiteral("--hook"),
+                         libexec + QStringLiteral("/konvoy-hook")};
+        if (parser.isSet(yesOption)) {
+            args.append(QStringLiteral("--yes"));
+        }
+        for (const Account &account : config.accounts()) {
+            args.append(account.configDir + QStringLiteral("/settings.json"));
+        }
+        QProcess helper;
+        helper.setProcessChannelMode(QProcess::ForwardedChannels);
+        helper.setInputChannelMode(QProcess::ForwardedInputChannel);
+        helper.start(libexec + QStringLiteral("/konvoy-hooks"), args);
+        if (!helper.waitForStarted()) {
+            qWarning("konvoy: cannot run %s/konvoy-hooks; is Konvoy installed?", qPrintable(libexec));
+            return 1;
+        }
+        helper.waitForFinished(-1);
+        return helper.exitCode();
+    }
 
     const bool screenshot = parser.isSet(screenshotOption);
     // One window for everything: a second start raises the first one. Test runs

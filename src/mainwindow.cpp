@@ -13,6 +13,10 @@
 #include <QKeyEvent>
 #include <QMessageBox>
 #include <QSplitter>
+#include <QTimer>
+
+#include <KNotification>
+#include <KWindowSystem>
 
 namespace
 {
@@ -66,6 +70,11 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
     connect(m_grid, &PaneGrid::focusModeChanged, m_sidebar, &Sidebar::setFocusMode);
     connect(m_grid, &PaneGrid::panesChanged, this, &MainWindow::panesChanged);
     connect(qApp, &QApplication::focusChanged, this, &MainWindow::onFocusChanged);
+
+    // The working icons turn while any pane works.
+    m_spinner = new QTimer(this);
+    m_spinner->setInterval(90);
+    connect(m_spinner, &QTimer::timeout, this, &MainWindow::tickSpinner);
 
     setupShortcuts();
     resize(1600, 1000);
@@ -157,6 +166,12 @@ void MainWindow::adoptPane(Pane *pane)
     connect(pane, &Pane::changed, m_sidebar, &Sidebar::refresh);
     connect(pane, &Pane::shortcutCheck, this, &MainWindow::onShortcutCheck);
     connect(pane, &Pane::closeRequested, this, &MainWindow::closePane);
+    connect(pane, &Pane::stateChanged, this, &MainWindow::onPaneState);
+    connect(pane, &QObject::destroyed, this, [this, pane] {
+        if (QPointer<KNotification> n = m_notifications.take(pane)) {
+            n->close();
+        }
+    });
     connect(pane, &Pane::terminalClosed, this, [this](Pane *p) {
         // The shell in the pane ended (exit or Ctrl+D at the prompt): the pane goes.
         m_grid->removePane(p);
@@ -177,10 +192,15 @@ void MainWindow::closePane(Pane *pane)
     if (!pane) {
         return;
     }
-    if (pane->claudeRunning()) {
+    // Only a pane that works, waits for an answer or runs background tasks asks first.
+    if (pane->isBusy()) {
+        const PaneState state = pane->state();
+        const QString doing = state == PaneState::Working  ? QStringLiteral("Claude is working")
+            : state == PaneState::Background               ? QStringLiteral("Background tasks still run")
+                                                           : QStringLiteral("Claude is waiting for you");
         const auto answer = QMessageBox::question(this,
                                                   QStringLiteral("Close pane"),
-                                                  QStringLiteral("Claude is still running in this pane:\n\n%1\n\nClose it anyway?").arg(describe(pane)),
+                                                  QStringLiteral("%1 in this pane:\n\n%2\n\nClose it anyway?").arg(doing, describe(pane)),
                                                   QMessageBox::Close | QMessageBox::Cancel,
                                                   QMessageBox::Cancel);
         if (answer != QMessageBox::Close) {
@@ -221,7 +241,95 @@ void MainWindow::onFocusChanged(QWidget *, QWidget *now)
             if (!pane->isCurrent()) {
                 makeCurrent(pane);
             }
+            pane->markSeen();
             return;
+        }
+    }
+}
+
+void MainWindow::onPaneState(Pane *pane, PaneState)
+{
+    const PaneState state = pane->state();
+    const bool onScreen = isActiveWindow() && pane->isVisible();
+
+    // Finishing in front of the user's eyes needs no "done" marker.
+    if (state == PaneState::Done && onScreen && pane->isCurrent()) {
+        pane->markSeen();
+        return;
+    }
+
+    if (QPointer<KNotification> old = m_notifications.take(pane)) {
+        old->close();
+    }
+    if (state == PaneState::Permission || state == PaneState::Question || state == PaneState::Done) {
+        // Only a state that holds for a moment is worth a notification.
+        const qint64 since = pane->stateSince();
+        QPointer<Pane> target(pane);
+        QTimer::singleShot(1500, this, [this, target, state, since] {
+            if (target && target->state() == state && target->stateSince() == since) {
+                notify(target);
+            }
+        });
+    }
+
+    bool anyWorking = false;
+    for (const Pane *p : m_grid->panes()) {
+        anyWorking = anyWorking || p->state() == PaneState::Working;
+    }
+    if (anyWorking && !m_spinner->isActive()) {
+        m_spinner->start();
+    } else if (!anyWorking) {
+        m_spinner->stop();
+    }
+    m_sidebar->refresh();
+}
+
+void MainWindow::notify(Pane *pane)
+{
+    // Only when the pane is out of sight: hidden by focus mode, or the window is not active.
+    if (isActiveWindow() && pane->isVisible()) {
+        return;
+    }
+    const PaneState state = pane->state();
+    const QString event = state == PaneState::Permission ? QStringLiteral("permission")
+        : state == PaneState::Question                   ? QStringLiteral("question")
+                                                         : QStringLiteral("done");
+    auto *n = new KNotification(event, KNotification::CloseOnTimeout);
+    n->setTitle(QStringLiteral("%1 · %2").arg(pane->account().key, QDir(pane->folder()).dirName()));
+    QString text = Theme::stateText(state);
+    if (!pane->title().isEmpty()) {
+        text += QStringLiteral(" · ") + pane->title();
+    }
+    n->setText(text);
+    n->setIconName(QStringLiteral("utilities-terminal"));
+    KNotificationAction *show = n->addDefaultAction(QStringLiteral("Show"));
+    QPointer<Pane> target(pane);
+    connect(show, &KNotificationAction::activated, this, [this, n, target] {
+        KWindowSystem::setCurrentXdgActivationToken(n->xdgActivationToken());
+        if (target) {
+            showPane(target);
+        }
+    });
+    m_notifications.insert(pane, n);
+    n->sendEvent();
+}
+
+void MainWindow::showPane(Pane *pane)
+{
+    show();
+    raise();
+    activateWindow();
+    makeCurrent(pane);
+    pane->focusTerminal();
+}
+
+void MainWindow::tickSpinner()
+{
+    Theme::advanceSpin();
+    m_sidebar->refresh();
+    for (Pane *p : m_grid->panes()) {
+        if (p->state() == PaneState::Working) {
+            p->refreshHeader();
         }
     }
 }
@@ -244,14 +352,14 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     QStringList running;
     for (const Pane *pane : m_grid->panes()) {
-        if (pane->claudeRunning()) {
+        if (pane->isBusy()) {
             running.append(QStringLiteral("• ") + describe(pane));
         }
     }
     if (!running.isEmpty()) {
         const auto answer = QMessageBox::warning(this,
                                                  QStringLiteral("Close Konvoy"),
-                                                 QStringLiteral("Claude is still running in %1:\n\n%2\n\nClose Konvoy anyway?")
+                                                 QStringLiteral("Claude is working, waiting for you or running background tasks in %1:\n\n%2\n\nClose Konvoy anyway?")
                                                      .arg(running.size() == 1 ? QStringLiteral("1 pane") : QStringLiteral("%1 panes").arg(running.size()),
                                                           running.join(QLatin1Char('\n'))),
                                                  QMessageBox::Close | QMessageBox::Cancel,

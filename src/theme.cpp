@@ -4,14 +4,28 @@
 #include <QPainterPath>
 #include <QPalette>
 
+#include <cmath>
+
 namespace Theme
 {
+
+namespace
+{
+qreal spinAngle = 0;
+}
+
+void advanceSpin()
+{
+    spinAngle = std::fmod(spinAngle + 30, 360);
+}
 
 QColor stateColor(PaneState state)
 {
     switch (state) {
     case PaneState::Working:
         return QColor(61, 174, 233);
+    case PaneState::Background:
+        return QColor(41, 128, 185);
     case PaneState::Permission:
         return QColor(246, 116, 0);
     case PaneState::Question:
@@ -34,6 +48,8 @@ QString stateText(PaneState state)
         return QStringLiteral("starting");
     case PaneState::Working:
         return QStringLiteral("working");
+    case PaneState::Background:
+        return QStringLiteral("in background");
     case PaneState::Permission:
         return QStringLiteral("needs permission");
     case PaneState::Question:
@@ -64,7 +80,7 @@ QColor accent()
     return QApplication::palette().color(QPalette::Highlight);
 }
 
-void paintStateIcon(QPainter &p, QPointF c, PaneState state, qreal r, qreal spin)
+void paintStateIcon(QPainter &p, QPointF c, PaneState state, qreal r)
 {
     const QColor col = stateColor(state);
     p.save();
@@ -76,7 +92,17 @@ void paintStateIcon(QPainter &p, QPointF c, PaneState state, qreal r, qreal spin
         p.drawEllipse(c, r - 1, r - 1);
         p.setPen(QPen(col, 2.2, Qt::SolidLine, Qt::RoundCap));
         const QRectF arc(c.x() - r + 1, c.y() - r + 1, 2 * r - 2, 2 * r - 2);
-        p.drawArc(arc, int((90 - spin) * 16), -250 * 16);
+        p.drawArc(arc, int((90 - spinAngle) * 16), -250 * 16);
+        break;
+    }
+    case PaneState::Background: {
+        p.setPen(Qt::NoPen);
+        p.setBrush(col);
+        p.drawEllipse(c, r, r);
+        p.setBrush(Qt::white);
+        for (int i = -1; i <= 1; ++i) {
+            p.drawEllipse(QPointF(c.x() + i * 3.2, c.y()), 1.15, 1.15);
+        }
         break;
     }
     case PaneState::Permission: {

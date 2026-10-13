@@ -47,6 +47,10 @@ QString stateLabel(const Pane *pane)
     if (Theme::needsYou(state) || state == PaneState::Starting || state == PaneState::Exited) {
         return Theme::stateText(state) + QStringLiteral(" · ") + since;
     }
+    if (state == PaneState::Background) {
+        const qsizetype n = pane->backgroundTasks().size();
+        return (n == 1 ? QStringLiteral("1 task running") : QStringLiteral("%1 tasks running").arg(n)) + QStringLiteral(" · ") + since;
+    }
     return since;
 }
 }
@@ -140,7 +144,7 @@ void CardList::paintEvent(QPaintEvent *)
         p.drawText(QRectF(r.right() - 18, line1 - 10, 12, 20), Qt::AlignVCenter | Qt::AlignRight, number);
         const QString label = stateLabel(pane);
         const int labelWidth = smallMetrics.horizontalAdvance(label);
-        p.setPen(Theme::needsYou(state) || state == PaneState::Exited ? stateColor : dim);
+        p.setPen(Theme::needsYou(state) || state == PaneState::Exited || state == PaneState::Background ? stateColor : dim);
         p.drawText(QRectF(r.right() - 24 - labelWidth, line1 - 10, labelWidth + 2, 20), Qt::AlignVCenter | Qt::AlignLeft, label);
 
         const qreal folderX = r.x() + 56;
@@ -196,9 +200,13 @@ bool CardList::event(QEvent *event)
         const int i = cardAt(help->pos());
         if (i >= 0) {
             const Pane *pane = m_panes.at(i);
+            QString state = Theme::stateText(pane->state());
+            if (pane->state() == PaneState::Background) {
+                state += QStringLiteral(": ") + pane->backgroundTasks().join(QStringLiteral(", "));
+            }
             QToolTip::showText(help->globalPos(),
                                QStringLiteral("%1 · %2\n%3\n%4\n\nMiddle click closes the pane.")
-                                   .arg(pane->account().name, Config::collapseHome(pane->folder()), pane->title(), Theme::stateText(pane->state())),
+                                   .arg(pane->account().name, Config::collapseHome(pane->folder()), pane->title(), state),
                                this);
         } else {
             QToolTip::hideText();

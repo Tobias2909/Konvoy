@@ -88,6 +88,7 @@ Copy, paste and search come from the embedded Konsole terminal.
 | State | Icon | Meaning |
 |---|---|---|
 | working | animated | Claude is running |
+| in background | blue, three dots | the turn is over, but background shells, monitors or subagents still run |
 | needs permission | strong colour | a permission dialog is open |
 | question | strong colour | Claude asks you something (question or plan approval) |
 | done | green | Claude finished and you have not looked yet |
@@ -100,37 +101,58 @@ state.
 
 ### Where the state comes from
 
-1. **Claude's own status code.** Claude Code reports `working`, `blocked`
-   (permission, question, auth) and `done` to terminals that support the
-   OSC 7501 program status protocol. If Konvoy can read it from the
-   embedded terminal, it is the primary source.
-2. **Hooks.** Konvoy's hook script records events per pane:
+1. **Claude's terminal title.** Claude Code puts a status symbol in front of
+   its title: it alternates `◐` and `◑` while it works and shows `✳`
+   otherwise. A spinning symbol means working, a still one means the turn is
+   over or Claude waits for an answer. This also catches an interrupt with
+   Esc, which no hook reports. Konsole reports title changes about 2 seconds
+   late, so states follow with that delay.
+2. **Hooks** say what Claude waits for. Konvoy's hook script appends one line
+   per event to `$XDG_RUNTIME_DIR/konvoy/events/<pane>`, which Konvoy watches:
 
-   | Hook | State |
+   | Hook | Meaning |
    |---|---|
-   | `SessionStart` | registers the session id for restore |
-   | `UserPromptSubmit` | working |
-   | `PermissionRequest` | needs permission |
+   | `SessionStart` | session id (for restart and restore), idle |
+   | `UserPromptSubmit` | a new turn starts |
+   | `PermissionRequest` | needs permission (question for `AskUserQuestion` and `ExitPlanMode`) |
    | `PreToolUse` on `AskUserQuestion` or `ExitPlanMode` | question |
-   | `PostToolUse`, `PostToolUseFailure` | working |
-   | `Stop`, `StopFailure` | done |
+   | `Notification` | `permission_prompt` and MCP elicitation dialogs as a backup |
+   | `Stop`, `StopFailure` | done, or in background while its `background_tasks` list is not empty |
    | `SessionEnd` | exited |
 
-   No hook fires when you interrupt Claude with Esc, and probably none after
-   a denied permission. Source 1 covers that. Without it a fallback applies:
-   a pane in `working` that prints nothing for about 10 seconds becomes
-   `done`, because Claude's spinner normally animates without pause.
-3. **The terminal itself** reports when the Claude process ends.
+   The script also passes the session's `CLAUDE_CONFIG_DIR`, so the account
+   badge follows `/switch` right away.
+3. **The processes.** Every 2 seconds a pane checks whether its claude process
+   is still the same. A new one means an account switch, none means exited.
+   When a background task ends, Claude starts a turn by itself (it fires
+   `UserPromptSubmit`), and that turn's `Stop` brings the new list. A shell
+   stopped from Claude's task list may end without such a turn, so a pane in
+   background whose list holds only shells turns done once no shell has run
+   below claude for about 8 seconds. Command monitors count as shells there,
+   because Claude Code lists them as such. Its own housekeeping tasks (dream,
+   auto-mode scan, memory import) do not count.
+4. **Declined dialogs.** Declining a permission fires no hook. When a dialog
+   waits and the user presses Enter, Esc or a digit in that pane, and Claude
+   neither starts working nor reports anything within 2 seconds, the dialog
+   is taken as dismissed and the pane turns idle.
+
+A dialog hook older than the last start of work is ignored, it was answered.
+A pane that finishes while it has focus in the active window goes straight
+to idle. A pane that shows `exited` offers a Restart button in its header,
+which starts the account command again with `--resume` and the last session
+id.
 
 ### Hooks setup
 
-`konvoy --install-hooks` appends Konvoy's entries to the Claude Code
-`settings.json` and shows what it adds first. It never edits or removes
-other hooks, and Claude Code runs all hooks of an event, so existing hooks
-keep working everywhere. `konvoy --remove-hooks` removes exactly Konvoy's
-entries. The hooks only observe. They run async and never return an allow
-or deny decision. Outside a Konvoy pane (`KONVOY_PANE` unset) they exit at
-once.
+`konvoy --install-hooks` appends Konvoy's entries to every account's Claude
+Code `settings.json` (symlinked files once) and shows what it adds first. It
+never edits or removes other hooks, and Claude Code runs all hooks of an
+event, so existing hooks keep working everywhere. `konvoy --remove-hooks`
+removes exactly Konvoy's entries, `konvoy --hooks-status` lists them. The
+hooks only observe. They print nothing and never return an allow or deny
+decision. Outside a Konvoy pane (`KONVOY_PANE` unset) they exit at once.
+They run synchronously, which keeps the events in order; each takes a few
+milliseconds.
 
 ## Notifications
 
@@ -160,8 +182,8 @@ dimmed then because the numbers are the last known ones.
 
 ## Closing and restoring
 
-* Closing the window while panes are working shows a warning that lists
-  them.
+* Closing a pane or the window asks first only while Claude works, waits
+  for an answer or runs background tasks there. Middle click on a card or a header closes a pane.
 * On the next start Konvoy restores the panes with their order, sizes,
   folders and accounts, and continues each chat with `claude --resume`.
 

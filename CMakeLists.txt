@@ -10,7 +10,7 @@ include(KDECompilerSettings NO_POLICY_SCOPE)
 include(FeatureSummary)
 
 find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets DBus)
-find_package(KF6 6.0 REQUIRED COMPONENTS CoreAddons Config Parts XmlGui DBusAddons)
+find_package(KF6 6.0 REQUIRED COMPONENTS CoreAddons Config Parts XmlGui DBusAddons Notifications WindowSystem)
 
 add_executable(konvoy
     src/main.cpp
@@ -23,7 +23,10 @@ add_executable(konvoy
     src/mainwindow.cpp
 )
 
-target_compile_definitions(konvoy PRIVATE PROJECT_VERSION_STRING="${PROJECT_VERSION}")
+target_compile_definitions(konvoy PRIVATE
+    PROJECT_VERSION_STRING="${PROJECT_VERSION}"
+    KONVOY_LIBEXECDIR="${KDE_INSTALL_FULL_LIBEXECDIR}"
+)
 
 target_link_libraries(konvoy PRIVATE
     Qt6::Widgets
@@ -33,9 +36,13 @@ target_link_libraries(konvoy PRIVATE
     KF6::Parts
     KF6::XmlGui
     KF6::DBusAddons
+    KF6::Notifications
+    KF6::WindowSystem
 )
 
 install(TARGETS konvoy ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+install(PROGRAMS hooks/konvoy-hook hooks/konvoy-hooks DESTINATION ${KDE_INSTALL_LIBEXECDIR})
+install(FILES konvoy.notifyrc DESTINATION ${KDE_INSTALL_KNOTIFYRCDIR})
 # The menu entry gets the full path: a prefix like ~/.local/bin is often only in the
 # shell's PATH, not in the desktop session's.
 configure_file(io.github.tobias2909.konvoy.desktop.in ${CMAKE_CURRENT_BINARY_DIR}/io.github.tobias2909.konvoy.desktop @ONLY)

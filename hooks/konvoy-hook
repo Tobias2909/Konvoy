@@ -1,0 +1,45 @@
+#!/bin/bash
+# Claude Code hook for Konvoy. Appends one line per event to the pane's event file:
+#   time  event  session_id  tool_name  notification_type  config_dir  background_tasks
+# background_tasks is only set on Stop: the kinds of the tasks that still run, such as
+# "shell,subagent". Outside a Konvoy pane, or when Konvoy is gone, it does
+# nothing. It prints nothing, because SessionStart and UserPromptSubmit output would
+# land in Claude's context.
+
+file="${XDG_RUNTIME_DIR:-/run/user/$UID}/konvoy/events/${KONVOY_PANE:-none}"
+if [ -z "$KONVOY_PANE" ] || [ ! -f "$file" ]; then
+    cat >/dev/null
+    exit 0
+fi
+
+# Most fields sit near the start of the JSON; tool input and output can be large.
+# Stop lists its background tasks after the last message, so it is read in full.
+input=
+if [ "$1" = Stop ]; then
+    input=$(cat)
+    head=${input:0:4096}
+else
+    head=$(head -c 4096)
+    cat >/dev/null
+fi
+
+field() {
+    local re="\"$1\": ?\"([^\"]*)\""
+    [[ $head =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"
+}
+
+# Quotes inside JSON strings are escaped, so "type":"..." only matches real keys.
+tasks=
+if [[ $input == *'"background_tasks":['* ]]; then
+    rest=${input#*'"background_tasks":['}
+    rest=${rest%%'],"session_crons"'*}
+    re='"type": ?"([^"]*)"'
+    while [[ $rest =~ $re ]]; do
+        tasks+=${tasks:+,}${BASH_REMATCH[1]}
+        rest=${rest#*"${BASH_REMATCH[0]}"}
+    done
+fi
+
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$EPOCHREALTIME" "$1" "$(field session_id)" "$(field tool_name)" \
+    "$(field notification_type)" "${CLAUDE_CONFIG_DIR-}" "$tasks" >>"$file"
+exit 0

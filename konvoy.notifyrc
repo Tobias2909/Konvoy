@@ -1,0 +1,19 @@
+[Global]
+IconName=utilities-terminal
+Name=Konvoy
+Comment=Konvoy
+
+[Event/permission]
+Name=Needs permission
+Comment=A Claude Code session waits for a permission decision
+Action=Popup
+
+[Event/question]
+Name=Question
+Comment=A Claude Code session asks you something
+Action=Popup
+
+[Event/done]
+Name=Done
+Comment=A Claude Code session finished its turn
+Action=Popup
