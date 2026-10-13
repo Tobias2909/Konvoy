@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QIcon>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QTimer>
@@ -41,6 +42,9 @@ int main(int argc, char **argv)
                      KAboutLicense::MIT);
     about.setDesktopFileName(QStringLiteral("io.github.tobias2909.konvoy"));
     KAboutData::setApplicationData(about);
+    // An icon theme may bring its own version; the built-in one is the fallback.
+    QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("io.github.tobias2909.konvoy"),
+                                                 QIcon(QStringLiteral(":/icons/io.github.tobias2909.konvoy.svg"))));
 
     QCommandLineParser parser;
     about.setupCommandLine(&parser);
