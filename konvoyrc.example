@@ -1,0 +1,26 @@
+# Copy to ~/.config/konvoyrc and adjust.
+#
+# Accounts lists the account keys in the order they appear. Each key needs a
+# group [Account <key>]. One account is enough, add as many as you use.
+#   Name       shown in the sidebar and the new pane dialog
+#   Command    what the pane's shell runs to start Claude Code
+#              (a binary, a wrapper script or a shell function)
+#   ConfigDir  the account's CLAUDE_CONFIG_DIR, ~/.claude for the default one
+#   Color      optional, a palette colour is used when missing
+
+[General]
+Accounts=A,B
+
+[Account A]
+Name=claude
+Command=claude
+ConfigDir=~/.claude
+
+[Account B]
+Name=work
+Command=CLAUDE_CONFIG_DIR=~/.claude-work claude
+ConfigDir=~/.claude-work
+
+[Folders]
+# Always listed first in the new pane dialog. The star in the dialog edits this.
+Pinned=~/projects/app,~/projects/site

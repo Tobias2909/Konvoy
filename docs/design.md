@@ -16,10 +16,16 @@ and shows at a glance which of them is waiting for you.
 └──────────────┴────────────────────────┴────────────────────────┘
 ```
 
-* **Sidebar** on the left. Its width can be dragged, and it collapses to a
-  strip that only shows the state icons. Top: buttons for new pane,
-  overview/focus and equal sizes. Middle: one row per pane. Bottom: the
-  usage block.
+* **Sidebar** on the left, 290 px by default. Its width can be dragged, and
+  it collapses to a 44 px strip that only shows the state icons, account
+  stripes and small usage bars. Top: buttons for new pane, overview/focus,
+  equal sizes and collapse. Middle: one card per pane. Bottom: the usage
+  block.
+* **Pane cards**: a stripe in the state colour on the left, the state icon,
+  the account badge, the folder, the state text with its duration and the
+  `Alt` number on the first line, the chat title on the second. Panes that
+  need you get a card tinted in the state colour. The focused pane gets an
+  outline in the Plasma accent colour.
 * **Panes** on the right. Each pane is a real Konsole terminal embedded
   through `konsolepart`, the component Yakuake and Kate's terminal panel use.
   Every pane uses the Konsole profile `Konvoy`, so its font and colours can
@@ -30,9 +36,12 @@ and shows at a glance which of them is waiting for you.
 
 ## Accounts
 
-Konvoy supports several Claude Code accounts. Each account is an entry in
-the config with a letter, a colour, the command that starts it and its
-config dir (`CLAUDE_CONFIG_DIR`). A pane runs an interactive login shell
+Konvoy works with any number of Claude Code accounts, one or more. Nothing
+in the code assumes a fixed count. Each account is an entry in the config
+with a letter, a colour, the command that starts it and its config dir
+(`CLAUDE_CONFIG_DIR`). Accounts without a colour get the next one from a
+built in palette. The sidebar, the new pane dialog and the usage fetcher
+all follow the list. A pane runs an interactive shell
 that starts the account command, so shell functions and wrappers around
 `claude` keep working. The account of a pane can change while it runs, the
 hook reports the config dir it sees, and the pane follows.
@@ -131,8 +140,11 @@ to the pane. No sound.
 
 ## Usage block
 
-For every account: the 5 hour and 7 day limits as bars with percent and
-reset time, and a warning when the login has expired.
+For every account a block with the account badge and name, then one line
+for the 5 hour and one for the 7 day limit. Each line has a bar in the
+account colour, the percent (orange from 80, red from 95) and the reset
+time. A warning line shows when the login has expired, and the bars are
+dimmed then because the numbers are the last known ones.
 
 * A small fetcher (Python, standard library only) reads the usage with each
   account's own login, the same numbers Claude Code's `/usage` shows. It
