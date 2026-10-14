@@ -468,6 +468,8 @@ void MainWindow::setSidebarCollapsed(bool collapsed)
         }
         m_sidebar->setCollapsed(true);
         m_sidebar->setFixedWidth(Sidebar::collapsedWidth);
+        // The splitter keeps the old width for the sidebar otherwise, as empty space.
+        m_split->setSizes({Sidebar::collapsedWidth, qMax(1, total - Sidebar::collapsedWidth)});
     } else {
         m_sidebar->setCollapsed(false);
         m_sidebar->setMinimumWidth(sidebarMinWidth);
