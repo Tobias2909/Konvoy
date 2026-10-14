@@ -68,7 +68,6 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
     , m_config(config)
 {
     setWindowTitle(QStringLiteral("Konvoy"));
-    setWindowIcon(QIcon::fromTheme(QStringLiteral("utilities-terminal")));
 
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -369,7 +368,7 @@ void MainWindow::notify(Pane *pane)
         text += QStringLiteral(" · ") + pane->title();
     }
     n->setText(text);
-    n->setIconName(QStringLiteral("utilities-terminal"));
+    n->setIconName(QStringLiteral("io.github.tobias2909.konvoy"));
     KNotificationAction *show = n->addDefaultAction(QStringLiteral("Show"));
     QPointer<Pane> target(pane);
     connect(show, &KNotificationAction::activated, this, [this, n, target] {
