@@ -21,6 +21,7 @@
 #include <QToolButton>
 #include <QToolTip>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 namespace
 {
@@ -69,6 +70,16 @@ QString paneTooltip(const Pane *pane, const QString &hint)
     return QStringLiteral("%1 · %2\n%3\n%4\n\n%5").arg(pane->account().name, Config::collapseHome(pane->folder()), pane->title(), state, hint);
 }
 
+// The mark of a minimized pane: a short bar, as on the header's minimize button.
+void paintMinimizedBar(QPainter &p, QPointF centre, const QColor &color)
+{
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(color, 1.6, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(centre - QPointF(4, 0), centre + QPointF(4, 0));
+    p.restore();
+}
+
 QToolButton *toolButton(const QString &icon, const QString &tip, QWidget *parent)
 {
     auto *b = new QToolButton(parent);
@@ -115,6 +126,12 @@ QSize CardList::minimumSizeHint() const
     return QSize(120, sizeHint().height());
 }
 
+QRect CardList::cardGeometry(Pane *pane) const
+{
+    const qsizetype i = m_panes.indexOf(pane);
+    return i < 0 ? QRect() : cardRect(int(i)).toAlignedRect();
+}
+
 QRectF CardList::cardRect(int index) const
 {
     return QRectF(margin, margin / 2.0 + index * (cardHeight + cardGap), width() - 2 * margin, cardHeight);
@@ -153,9 +170,14 @@ void CardList::paintCard(QPainter &p, const Pane *pane, const QRectF &r, int num
             p.drawRoundedRect(r.adjusted(-i + 2, -i + 4, i - 2, i + 2), 6 + i, 6 + i);
         }
     }
-    QColor bg = Theme::needsYou(state) ? Theme::withAlpha(stateColor, 0.16) : pal.color(QPalette::Window).lighter(130);
+    // A minimized pane's card stays in its place, faded: no fill, a dashed outline,
+    // dim text. Its state colours stay, so it still shows when it needs you.
+    const bool minimized = pane->isMinimized();
+    QColor bg = Theme::needsYou(state) ? Theme::withAlpha(stateColor, 0.16)
+        : minimized                    ? QColor(Qt::transparent)
+                                       : pal.color(QPalette::Window).lighter(130);
     if (hover || lifted) {
-        bg = bg.lighter(115);
+        bg = bg.alpha() == 0 ? Theme::withAlpha(text, 0.06) : bg.lighter(115);
     }
     if (lifted && bg.alpha() < 255) {
         // Tinted cards are see-through; the lifted one must hide what it floats over.
@@ -163,7 +185,10 @@ void CardList::paintCard(QPainter &p, const Pane *pane, const QRectF &r, int num
         p.setBrush(pal.color(QPalette::Window));
         p.drawRoundedRect(r, 6, 6);
     }
-    p.setPen(lifted ? QPen(Theme::accent(), 2) : pane->isCurrent() ? QPen(Theme::accent(), 1.3) : QPen(Qt::NoPen));
+    p.setPen(lifted                ? QPen(Theme::accent(), 2)
+                 : pane->isCurrent() ? QPen(Theme::accent(), 1.3)
+                 : minimized         ? QPen(Theme::withAlpha(text, 0.28), 1, Qt::DashLine)
+                                     : QPen(Qt::NoPen));
     p.setBrush(bg);
     p.drawRoundedRect(r, 6, 6);
     QPainterPath clip;
@@ -174,7 +199,9 @@ void CardList::paintCard(QPainter &p, const Pane *pane, const QRectF &r, int num
 
     const qreal line1 = r.y() + 16;
     Theme::paintStateIcon(p, QPointF(r.x() + 18, line1), state);
+    p.setOpacity(minimized ? 0.5 : 1.0);
     Theme::paintBadge(p, QRectF(r.x() + 32, line1 - 9, 18, 18), pane->account().key, pane->account().color);
+    p.setOpacity(1.0);
 
     // Right side of line 1: state text with its duration, then the Alt number.
     p.setFont(small);
@@ -188,17 +215,21 @@ void CardList::paintCard(QPainter &p, const Pane *pane, const QRectF &r, int num
     const qreal folderX = r.x() + 56;
     const qreal folderWidth = r.right() - 32 - labelWidth - folderX;
     p.setFont(bold);
-    p.setPen(text);
+    p.setPen(minimized ? dim : text);
     p.drawText(QRectF(folderX, line1 - 10, folderWidth, 20),
                Qt::AlignVCenter | Qt::AlignLeft,
                QFontMetrics(bold).elidedText(QDir(pane->folder()).dirName(), Qt::ElideRight, int(folderWidth)));
 
     const QString title = pane->title().isEmpty() ? Config::collapseHome(pane->folder()) : pane->title();
+    const qreal titleWidth = r.width() - 40 - (minimized ? 16 : 0);
     p.setFont(small);
-    p.setPen(dim);
-    p.drawText(QRectF(r.x() + 32, line1 + 10, r.width() - 40, 18),
+    p.setPen(minimized ? Theme::withAlpha(dim, 0.7) : dim);
+    p.drawText(QRectF(r.x() + 32, line1 + 10, titleWidth, 18),
                Qt::AlignVCenter | Qt::AlignLeft,
-               smallMetrics.elidedText(title, Qt::ElideRight, int(r.width() - 40)));
+               smallMetrics.elidedText(title, Qt::ElideRight, int(titleWidth)));
+    if (minimized) {
+        paintMinimizedBar(p, QPointF(r.right() - 12, line1 + 22), dim);
+    }
 }
 
 void CardList::paintEvent(QPaintEvent *)
@@ -259,7 +290,11 @@ void CardList::mousePressEvent(QMouseEvent *event)
         m_pressed = i;
         m_pressPos = event->position().toPoint();
         m_hold->start();
-        Q_EMIT paneClicked(m_panes.at(i));
+        // A minimized pane comes back on release, so pressing and holding its card
+        // moves it without bringing it back.
+        if (!m_panes.at(i)->isMinimized()) {
+            Q_EMIT paneClicked(m_panes.at(i));
+        }
     } else if (event->button() == Qt::MiddleButton) {
         Q_EMIT paneCloseRequested(m_panes.at(i));
     }
@@ -293,14 +328,18 @@ void CardList::mouseReleaseEvent(QMouseEvent *event)
         return;
     }
     m_hold->stop();
+    const int pressed = m_pressed;
     const int from = m_dragged;
     const int to = m_target;
     m_pressed = -1;
     m_dragged = -1;
-    setCursor(cardAt(event->position().toPoint()) >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    const int under = cardAt(event->position().toPoint());
+    setCursor(under >= 0 ? Qt::PointingHandCursor : Qt::ArrowCursor);
     update();
     if (from >= 0 && to != from) {
         Q_EMIT paneMoved(m_panes.at(from), to);
+    } else if (from < 0 && pressed >= 0 && pressed == under && m_panes.at(pressed)->isMinimized()) {
+        Q_EMIT paneClicked(m_panes.at(pressed));
     }
 }
 
@@ -316,9 +355,9 @@ bool CardList::event(QEvent *event)
         auto *help = static_cast<QHelpEvent *>(event);
         const int i = cardAt(help->pos());
         if (i >= 0 && m_dragged < 0) {
-            QToolTip::showText(help->globalPos(),
-                               paneTooltip(m_panes.at(i), QStringLiteral("Press and hold to move it. Middle click closes it.")),
-                               this);
+            const QString hint = m_panes.at(i)->isMinimized() ? QStringLiteral("Minimized: a click brings it back. Press and hold to move it. Middle click closes it.")
+                                                               : QStringLiteral("Press and hold to move it. Middle click closes it.");
+            QToolTip::showText(help->globalPos(), paneTooltip(m_panes.at(i), hint), this);
         } else {
             QToolTip::hideText();
         }
@@ -388,9 +427,16 @@ void PaneStrip::paintEvent(QPaintEvent *)
         }
         const qreal cy = r.center().y();
         Theme::paintStateIcon(p, QPointF(16, cy), state);
-        p.setPen(Qt::NoPen);
-        p.setBrush(pane->account().color);
-        p.drawRoundedRect(QRectF(28, cy - 6, 6, 12), 2, 2);
+        if (pane->isMinimized()) {
+            // A hollow stripe: the pane is minimized.
+            p.setPen(QPen(pane->account().color, 1.2));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(QRectF(28.6, cy - 5.4, 4.8, 10.8), 2, 2);
+        } else {
+            p.setPen(Qt::NoPen);
+            p.setBrush(pane->account().color);
+            p.drawRoundedRect(QRectF(28, cy - 6, 6, 12), 2, 2);
+        }
     }
 
     // Two small bars per account: 5 hours above 7 days.
@@ -441,7 +487,9 @@ bool PaneStrip::event(QEvent *event)
         const int i = rowAt(help->pos());
         const qreal top = usageTop();
         if (i >= 0) {
-            QToolTip::showText(help->globalPos(), paneTooltip(m_panes.at(i), QStringLiteral("Middle click closes it.")), this);
+            const QString hint = m_panes.at(i)->isMinimized() ? QStringLiteral("Minimized: a click brings it back. Middle click closes it.")
+                                                               : QStringLiteral("Middle click closes it.");
+            QToolTip::showText(help->globalPos(), paneTooltip(m_panes.at(i), hint), this);
         } else if (help->pos().y() >= top - 6) {
             const int k = qBound(0, int((help->pos().y() - top) / stripUsageRow), int(m_config->accounts().size()) - 1);
             const Account &account = m_config->accounts().at(k);
@@ -518,13 +566,15 @@ Sidebar::Sidebar(const Config *config, const UsageModel *usage, QWidget *parent)
     connect(m_cards, &CardList::paneCloseRequested, this, &Sidebar::paneCloseRequested);
     connect(m_cards, &CardList::paneMoved, this, &Sidebar::paneMoved);
     connect(m_cards, &CardList::emptyClicked, this, &Sidebar::emptyClicked);
-    auto *scroll = new QScrollArea(m_full);
-    scroll->setWidget(m_cards);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-    layout->addWidget(scroll, 1);
+    m_scroll = new QScrollArea(m_full);
+    m_scroll->setWidget(m_cards);
+    m_scroll->setWidgetResizable(true);
+    m_scroll->setFrameShape(QFrame::NoFrame);
+    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    // The wheel steps through the panes here too, instead of scrolling the cards.
+    m_scroll->viewport()->installEventFilter(this);
+    layout->addWidget(m_scroll, 1);
     layout->addWidget(new UsageBlock(config, usage, m_full));
     outer->addWidget(m_full);
 
@@ -583,6 +633,50 @@ void Sidebar::mousePressEvent(QMouseEvent *event)
     // Presses nothing else took: the space around the buttons.
     if (event->button() == Qt::LeftButton) {
         Q_EMIT emptyClicked();
+    }
+}
+
+void Sidebar::wheelEvent(QWheelEvent *event)
+{
+    // Wheel turns nothing else took: buttons, usage block, the collapsed strip.
+    wheel(event);
+}
+
+bool Sidebar::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_scroll->viewport() && event->type() == QEvent::Wheel) {
+        wheel(static_cast<QWheelEvent *>(event));
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void Sidebar::wheel(QWheelEvent *event)
+{
+    // One notch (120) per pane. A touchpad's small steps add up to that first, so a
+    // swipe does not race through all panes. Turning back starts the count anew.
+    const int delta = event->angleDelta().y();
+    if (delta == 0) {
+        event->ignore();
+        return;
+    }
+    if ((delta > 0) != (m_wheel > 0) && m_wheel != 0) {
+        m_wheel = 0;
+    }
+    m_wheel += delta;
+    const int notches = m_wheel / 120;
+    m_wheel -= notches * 120;
+    if (notches != 0) {
+        Q_EMIT paneStepRequested(-notches); // turning down goes to the next pane
+    }
+    event->accept();
+}
+
+void Sidebar::showCard(Pane *pane)
+{
+    const QRect r = m_cards->cardGeometry(pane);
+    if (r.isValid()) {
+        m_scroll->ensureVisible(r.center().x(), r.center().y(), 0, r.height() / 2 + cardGap);
     }
 }
 

@@ -12,6 +12,7 @@ class QSplitter;
 
 // The panes on the right. Overview mode puts them in an automatic grid of
 // splitters, focus mode shows one of them big while the others keep running hidden.
+// Minimized panes keep their place in the order but stay out of the grid.
 class PaneGrid : public QWidget
 {
     Q_OBJECT
@@ -19,15 +20,17 @@ public:
     explicit PaneGrid(QWidget *parent = nullptr);
 
     const QList<Pane *> &panes() const { return m_panes; }
+    QList<Pane *> shownPanes() const; // the panes that are not minimized
     Pane *current() const { return m_current; }
 
     void addPane(Pane *pane);
     void removePane(Pane *pane);
-    void movePane(Pane *pane, int delta); // swaps with the pane delta places away
+    void movePane(Pane *pane, int delta); // swaps with the shown pane delta places away
     void movePaneVertically(Pane *pane, int rows);
     void movePaneTo(Pane *pane, int index); // takes it out and puts it in at index
     void swapPanes(Pane *a, Pane *b);
     void setCurrent(Pane *pane);
+    void setMinimized(Pane *pane, bool minimized);
 
     bool focusMode() const { return m_focusMode; }
     void setFocusMode(bool on);
@@ -49,6 +52,10 @@ Q_SIGNALS:
 
 private:
     void rebuild();
+    // Hiding the pane that has the keys would pass them on to the next pane in the
+    // focus chain, which counts as looking at it. The grid holds them meanwhile.
+    QPointer<Pane> holdFocus();
+    Pane *shownNear(qsizetype index) const;
     QList<QList<int>> currentSlotSizes() const;
     void applySlotSizes(const QList<QList<int>> &sizes);
     // Changes the order of the panes; every slot keeps its size.

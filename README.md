@@ -32,14 +32,19 @@ the background and one is still at work.*
 * The 5 hour and 7 day usage of every account with its reset times. A click on
   a reset time shows the time left instead
 * Focus mode shows one session big while the sidebar keeps an eye on the rest
+* The button at the right end of a session's header minimizes it: it keeps
+  running and keeps its card in the sidebar, and a click on the card brings it
+  back
+* The mouse wheel over the sidebar steps through the sessions on screen
 * Press and hold a card to move its session, or drag a session's header onto
   another one to swap the two
 * The sidebar can shrink to a slim strip that still shows every state
 * After a restart every session comes back in its place and continues its chat
 * A new session starts fresh or continues one of the recent chats in its folder
 * `Alt+1` to `Alt+9` jump to a session, `Ctrl+Shift+T` opens a new one,
-  `Ctrl+Shift+E` turns focus mode on and off and `Ctrl+Shift` with the arrow
-  keys moves the current session around
+  `Ctrl+Shift+M` minimizes the current one, `Ctrl+Shift+E` turns focus mode on
+  and off and `Ctrl+Shift` with the arrow keys moves the current session
+  around
 
 <p>
 <img src="docs/screenshots/focus.png" width="49%" alt="Focus mode on the session that asks for a permission">

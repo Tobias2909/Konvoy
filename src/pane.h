@@ -14,8 +14,8 @@ class TerminalInterface;
 class QKeyEvent;
 class Pane;
 
-// Slim bar above each terminal: account badge, folder, chat title, state icon.
-// Dragging it onto another pane swaps the two.
+// Slim bar above each terminal: account badge, folder, chat title, state icon and
+// a minimize button. Dragging it onto another pane swaps the two.
 class PaneHeader : public QWidget
 {
     Q_OBJECT
@@ -27,18 +27,24 @@ Q_SIGNALS:
     void clicked();
     void middleClicked();
     void restartClicked();
+    void minimizeClicked();
 
 protected:
+    bool event(QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
 
 private:
+    QRectF minimizeRect() const;
+
     Pane *m_pane;
     QRectF m_restartRect;
     QPoint m_pressPos;
     bool m_pressed = false;
+    bool m_minimizeHover = false;
 };
 
 // One Claude Code session: a real Konsole terminal running the account's command
@@ -76,6 +82,9 @@ public:
 
     bool isCurrent() const { return m_current; }
     void setCurrent(bool current);
+    // Minimized panes keep running and keep their card, but the grid leaves them out.
+    bool isMinimized() const { return m_minimized; }
+    void setMinimized(bool minimized);
     void focusTerminal();
     void refreshHeader();
 
@@ -91,6 +100,7 @@ Q_SIGNALS:
     void stateChanged(Pane *pane, PaneState previous);
     void terminalClosed(Pane *pane);
     void closeRequested(Pane *pane);
+    void minimizeRequested(Pane *pane);
     void shortcutCheck(QKeyEvent *event, bool &override);
 
 private Q_SLOTS:
@@ -126,6 +136,7 @@ private:
     PaneState m_state = PaneState::Starting;
     qint64 m_stateSince = 0;
     bool m_current = false;
+    bool m_minimized = false;
 
     PaneHeader *m_header = nullptr;
     QWidget *m_dropOverlay = nullptr;

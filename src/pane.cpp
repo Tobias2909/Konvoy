@@ -25,8 +25,10 @@
 #include <QPainter>
 #include <QRegularExpression>
 #include <QFileSystemWatcher>
+#include <QHelpEvent>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QToolTip>
 #include <QUuid>
 #include <QVBoxLayout>
 
@@ -206,6 +208,12 @@ PaneHeader::PaneHeader(Pane *pane)
 {
     setFixedHeight(headerHeight);
     setCursor(Qt::PointingHandCursor);
+    setMouseTracking(true);
+}
+
+QRectF PaneHeader::minimizeRect() const
+{
+    return QRectF(width() - 28, 3, 22, headerHeight - 8);
 }
 
 QSize PaneHeader::sizeHint() const
@@ -241,8 +249,23 @@ void PaneHeader::paintEvent(QPaintEvent *)
     small.setPointSizeF(font().pointSizeF() - 1);
     p.setFont(small);
 
+    // The minimize button at the right end, a bar that lights up under the pointer.
+    const QRectF minimize = minimizeRect();
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    if (m_minimizeHover) {
+        p.setPen(Qt::NoPen);
+        p.setBrush(Theme::withAlpha(pal.color(QPalette::WindowText), 0.12));
+        p.drawRoundedRect(minimize, 4, 4);
+    }
+    p.setPen(QPen(pal.color(m_minimizeHover ? QPalette::WindowText : QPalette::PlaceholderText), 1.6, Qt::SolidLine, Qt::RoundCap));
+    const QPointF bar(minimize.center().x(), minimize.center().y() + 3);
+    p.drawLine(bar - QPointF(5, 0), bar + QPointF(5, 0));
+    p.restore();
+    const qreal iconX = minimize.left() - 14;
+
     // An exited pane offers to start Claude again.
-    qreal right = r.width() - 36;
+    qreal right = iconX - 18;
     m_restartRect = QRectF();
     if (state == PaneState::Exited && m_pane->canRestart()) {
         const QString label = QStringLiteral("Restart");
@@ -265,13 +288,16 @@ void PaneHeader::paintEvent(QPaintEvent *)
     p.drawText(QRectF(titleX, 0, titleWidth, r.height() - 2), Qt::AlignVCenter | Qt::AlignLeft,
                QFontMetrics(small).elidedText(m_pane->title(), Qt::ElideRight, int(titleWidth)));
 
-    Theme::paintStateIcon(p, QPointF(r.width() - 18, (r.height() - 2) / 2), state);
+    Theme::paintStateIcon(p, QPointF(iconX, (r.height() - 2) / 2), state);
 }
 
 void PaneHeader::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::MiddleButton) {
         Q_EMIT middleClicked();
+    } else if (event->button() == Qt::LeftButton && minimizeRect().contains(event->position())) {
+        m_minimizeHover = false; // the header hides before the pointer leaves it
+        Q_EMIT minimizeClicked();
     } else if (m_restartRect.contains(event->position())) {
         Q_EMIT restartClicked();
     } else {
@@ -283,6 +309,11 @@ void PaneHeader::mousePressEvent(QMouseEvent *event)
 
 void PaneHeader::mouseMoveEvent(QMouseEvent *event)
 {
+    const bool hover = !m_pressed && minimizeRect().contains(event->position());
+    if (hover != m_minimizeHover) {
+        m_minimizeHover = hover;
+        update();
+    }
     if (!m_pressed || (event->position().toPoint() - m_pressPos).manhattanLength() < QApplication::startDragDistance()) {
         return;
     }
@@ -301,6 +332,28 @@ void PaneHeader::mouseMoveEvent(QMouseEvent *event)
 void PaneHeader::mouseReleaseEvent(QMouseEvent *)
 {
     m_pressed = false;
+}
+
+void PaneHeader::leaveEvent(QEvent *)
+{
+    if (m_minimizeHover) {
+        m_minimizeHover = false;
+        update();
+    }
+}
+
+bool PaneHeader::event(QEvent *event)
+{
+    if (event->type() == QEvent::ToolTip) {
+        auto *help = static_cast<QHelpEvent *>(event);
+        if (minimizeRect().contains(help->pos())) {
+            QToolTip::showText(help->globalPos(), QStringLiteral("Minimize (Ctrl+Shift+M): the card stays, a click on it brings the pane back"), this);
+        } else {
+            QToolTip::hideText();
+        }
+        return true;
+    }
+    return QWidget::event(event);
 }
 
 // ---------------------------------------------------------------- Pane
@@ -324,6 +377,9 @@ Pane::Pane(const Config *config, const Account &account, const QString &folder, 
         Q_EMIT closeRequested(this);
     });
     connect(m_header, &PaneHeader::restartClicked, this, &Pane::restartClaude);
+    connect(m_header, &PaneHeader::minimizeClicked, this, [this] {
+        Q_EMIT minimizeRequested(this);
+    });
 
     const auto factory = KPluginFactory::loadFactory(KPluginMetaData(QStringLiteral("kf6/parts/konsolepart")));
     if (factory) {
@@ -772,6 +828,15 @@ void Pane::setCurrent(bool current)
     }
     m_current = current;
     m_header->update();
+    Q_EMIT changed(this);
+}
+
+void Pane::setMinimized(bool minimized)
+{
+    if (minimized == m_minimized) {
+        return;
+    }
+    m_minimized = minimized;
     Q_EMIT changed(this);
 }
 

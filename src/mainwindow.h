@@ -33,6 +33,7 @@ public Q_SLOTS:
     void newPane();
     void closeCurrentPane();
     void closePane(Pane *pane);
+    void minimizePane(Pane *pane);
     void jumpTo(int number);
 
 protected:
@@ -48,6 +49,7 @@ private:
     Pane *selectedPane() const;
     void adoptPane(Pane *pane);
     void makeCurrent(Pane *pane);
+    void stepPane(int steps);
     void updateSelection();
     void onFocusChanged(QWidget *old, QWidget *now);
     void onShortcutCheck(QKeyEvent *event, bool &override);

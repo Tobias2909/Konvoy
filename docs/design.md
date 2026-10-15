@@ -25,13 +25,16 @@ and shows at a glance which of them is waiting for you.
   the account badge, the folder, the state text with its duration and the
   `Alt` number on the first line, the chat title on the second. Panes that
   need you get a card tinted in the state colour. The focused pane gets an
-  outline in the Plasma accent colour.
+  outline in the Plasma accent colour. A minimized pane's card stays in its
+  place, faded: no fill, a dashed outline, dim text and a small bar; its state
+  colours stay. The collapsed strip shows it with a hollow account stripe.
 * **Panes** on the right. Each pane is a real Konsole terminal embedded
   through `konsolepart`, the component Yakuake and Kate's terminal panel use.
   Every pane uses the Konsole profile `Konvoy`, so its font and colours can
   differ from normal Konsole.
 * **Header bar** on every pane: the account letter in the account's colour,
-  the folder, the chat title and the state icon. It is also the drag handle.
+  the folder, the chat title, the state icon and a minimize button at the
+  right end. It is also the drag handle.
 * One global window. A second launch raises the running one.
 
 ## Accounts
@@ -53,24 +56,39 @@ hook reports the config dir it sees, and the pane follows.
   count can be changed.
 * The dividers can be dragged to make panes bigger or smaller. **Equal
   sizes** (button, `Ctrl+Shift+0`) restores the default. Sizes belong to the
-  grid slots and are saved with the layout. Adding or removing a pane or
-  changing the column count resets them to equal.
+  grid slots and are saved with the layout. Adding, removing, minimizing or
+  bringing back a pane or changing the column count resets them to equal.
 * **Focus mode** shows one pane big. The others keep running, hidden.
+* **Minimize** (the header's button, `Ctrl+Shift+M`) takes a pane out of the
+  grid. It keeps running and its card keeps its place in the sidebar. A click
+  on the card, its `Alt` number or the Show button of its notification brings
+  it back to its old place. Minimizing the selected pane hands the keys to the
+  next pane on screen, as closing does. With every pane minimized the grid
+  says so.
 * **Reordering** by dragging a header bar onto another pane (the two swap),
   by pressing and holding a sidebar card until it lifts and dropping it at
   another place (dragging it right away works too), or with
   `Ctrl+Shift+arrows`. All of them change the same order. The slots keep
-  their sizes, only the panes move between them.
+  their sizes, only the panes move between them. The arrows move a pane
+  among the panes on screen; minimized ones keep their place.
 * Focus mode keeps the overview sizes and gives them back when it ends.
 * Clicking a sidebar row focuses that pane. In focus mode it also becomes
   the big one.
+* **The wheel** over the sidebar steps through the panes on screen in the
+  sidebar's order, one pane per notch, and stops at the first and the last.
+  The pane it lands on gets the keys, and in focus mode it becomes the big
+  one. Minimized panes are skipped. A touchpad's small steps add up to a notch
+  first, so a swipe does not race through all panes. With none selected, the
+  first notch selects the pane that was selected last. The cards scroll along
+  to keep that card in view instead of scrolling by themselves.
 
 | Key | Action |
 |---|---|
-| `Alt+1` … `Alt+9` | jump to pane |
+| `Alt+1` … `Alt+9` | jump to pane (brings a minimized one back) |
 | `Ctrl+Shift+E` | toggle overview and focus |
 | `Ctrl+Shift+T` | new pane |
 | `Ctrl+Shift+W` | close pane |
+| `Ctrl+Shift+M` | minimize pane |
 | `Ctrl+Shift+Left/Right` | move pane |
 | `Ctrl+Shift+0` | equal sizes |
 
@@ -112,8 +130,10 @@ focus. Another window, a dialog or a click on the sidebar's empty space leaves
 none selected, and the terminal cursor turns hollow. A pane that finishes
 while selected skips done and goes straight to idle; every other finish shows
 done, even for a single pane on screen. With none selected, the keys that
-close or move the current pane do nothing; focus mode keeps showing the pane
-that was selected last.
+close, minimize or move the current pane do nothing; focus mode keeps showing
+the pane that was selected last. Rearranging the grid (a pane opens, closes,
+moves or is minimized) never passes the keys through another pane, so it
+cannot take away that pane's done.
 
 ### Where the state comes from
 
@@ -173,8 +193,9 @@ milliseconds.
 ## Notifications
 
 A KDE notification for needs permission, question and done, but only when
-that pane is not on screen or the window is not focused. Clicking it jumps
-to the pane. No sound.
+that pane is not on screen (hidden by focus mode or minimized) or the window
+is not focused. Clicking it jumps to the pane and brings a minimized one
+back. No sound.
 
 Konvoy's taskbar icon carries the number of panes that are done or wait for
 a permission or an answer, sent with the `com.canonical.Unity.LauncherEntry`
@@ -230,8 +251,8 @@ row says from when the numbers are.
   for an answer or runs background tasks there. Middle click on a card or a header closes a pane.
 * On the next start Konvoy restores the panes with their order, slot sizes,
   folders and accounts, and continues each chat with `--resume` and the
-  last session id the pane saw. Focus mode, the current pane, the sidebar
-  width and collapse and the window size come back too. The layout is saved
+  last session id the pane saw. Focus mode, the current pane, the minimized
+  panes, the sidebar width and collapse and the window size come back too. The layout is saved
   a second after each change and on close, in `konvoystaterc` in the XDG
   state folder. A config given with `--config` keeps its own state next to
   it, so test runs never reopen the real panes. `--open` skips the restore.

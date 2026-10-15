@@ -122,9 +122,11 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
     });
     connect(m_sidebar, &Sidebar::collapseRequested, this, &MainWindow::setSidebarCollapsed);
     connect(m_sidebar, &Sidebar::paneClicked, this, [this](Pane *pane) {
+        m_grid->setMinimized(pane, false);
         makeCurrent(pane);
         pane->focusTerminal();
     });
+    connect(m_sidebar, &Sidebar::paneStepRequested, this, &MainWindow::stepPane);
     // Takes the keys away from the panes, which leaves none selected, so a finish
     // keeps its "done" marker (see onPaneState).
     connect(m_sidebar, &Sidebar::emptyClicked, this, [this] {
@@ -170,6 +172,9 @@ void MainWindow::setupShortcuts()
     });
     add(Shortcuts::closePane, [this] {
         closeCurrentPane();
+    });
+    add(Shortcuts::minimizePane, [this] {
+        minimizePane(selectedPane());
     });
     add(Shortcuts::toggleFocus, [this] {
         m_grid->setFocusMode(!m_grid->focusMode());
@@ -241,6 +246,7 @@ void MainWindow::adoptPane(Pane *pane)
     connect(pane, &Pane::changed, m_sidebar, &Sidebar::refresh);
     connect(pane, &Pane::shortcutCheck, this, &MainWindow::onShortcutCheck);
     connect(pane, &Pane::closeRequested, this, &MainWindow::closePane);
+    connect(pane, &Pane::minimizeRequested, this, &MainWindow::minimizePane);
     connect(pane, &Pane::stateChanged, this, &MainWindow::onPaneState);
     connect(pane, &Pane::sessionChanged, this, &MainWindow::scheduleSave);
     connect(pane, &Pane::paneDropped, this, [this, pane](const QString &draggedId) {
@@ -256,9 +262,17 @@ void MainWindow::adoptPane(Pane *pane)
         }
     });
     connect(pane, &Pane::terminalClosed, this, [this](Pane *p) {
-        // The shell in the pane ended (exit or Ctrl+D at the prompt): the pane goes.
+        // The shell in the pane ended (exit or Ctrl+D at the prompt): the pane goes,
+        // and its keys go to the next pane on screen, as with closing. Its terminal
+        // is gone already and took the keys with it, but the pane is still the
+        // grid's current one: the user typed into it last.
+        const bool selected = m_grid->current() == p;
         m_grid->removePane(p);
         p->deleteLater();
+        if (selected && m_grid->current()) {
+            makeCurrent(m_grid->current());
+            m_grid->current()->focusTerminal();
+        }
     });
     m_grid->addPane(pane);
     makeCurrent(pane);
@@ -301,6 +315,21 @@ void MainWindow::closePane(Pane *pane)
     }
 }
 
+void MainWindow::minimizePane(Pane *pane)
+{
+    if (!pane) {
+        return;
+    }
+    // Minimizing the selected pane hands the keys to the next one on screen, as
+    // closing does.
+    const bool selected = pane->isCurrent();
+    m_grid->setMinimized(pane, true);
+    if (m_grid->current() && selected) {
+        makeCurrent(m_grid->current());
+        m_grid->current()->focusTerminal();
+    }
+}
+
 void MainWindow::jumpTo(int number)
 {
     const QList<Pane *> &panes = m_grid->panes();
@@ -308,8 +337,28 @@ void MainWindow::jumpTo(int number)
         return;
     }
     Pane *pane = panes.at(number - 1);
+    m_grid->setMinimized(pane, false);
     makeCurrent(pane);
     pane->focusTerminal();
+}
+
+// The wheel over the sidebar: through the panes on screen in the sidebar's order,
+// stopping at the first and the last. Minimized panes are skipped and stay so.
+void MainWindow::stepPane(int steps)
+{
+    const QList<Pane *> shown = m_grid->shownPanes();
+    if (shown.isEmpty()) {
+        return;
+    }
+    Pane *from = m_grid->current() ? m_grid->current() : shown.first();
+    Pane *to = from;
+    // With none selected the first step selects the pane that was selected last.
+    if (from->isCurrent() || !isActiveWindow()) {
+        to = shown.at(qBound(0, int(shown.indexOf(from)) + steps, int(shown.size()) - 1));
+    }
+    makeCurrent(to);
+    to->focusTerminal();
+    m_sidebar->showCard(to);
 }
 
 // The pane the grid works on (focus mode, Alt jumps). It looks selected only while
@@ -461,6 +510,7 @@ void MainWindow::showPane(Pane *pane)
     show();
     raise();
     activateWindow();
+    m_grid->setMinimized(pane, false);
     makeCurrent(pane);
     pane->focusTerminal();
 }
@@ -600,6 +650,7 @@ void MainWindow::saveSession()
         g.writeEntry("Account", panes.at(i)->account().key);
         g.writeEntry("Folder", Config::collapseHome(panes.at(i)->folder()));
         g.writeEntry("Session", panes.at(i)->sessionId());
+        g.writeEntry("Minimized", panes.at(i)->isMinimized());
     }
     state->sync();
 }
@@ -623,8 +674,12 @@ void MainWindow::restoreSession()
         if (!m_config->account(key)) {
             key = m_config->accounts().first().key; // the account is gone from the config
         }
-        if (!folder.isEmpty()) {
-            openPane(key, folder, g.readEntry("Session", QString()));
+        if (folder.isEmpty()) {
+            continue;
+        }
+        Pane *pane = openPane(key, folder, g.readEntry("Session", QString()));
+        if (pane && g.readEntry("Minimized", false)) {
+            m_grid->setMinimized(pane, true);
         }
     }
     // Slot sizes only stick once the window has its size; before that the panes'
@@ -635,7 +690,7 @@ void MainWindow::restoreSession()
     });
     const QList<Pane *> &panes = m_grid->panes();
     const int current = layout.readEntry("Current", 0);
-    if (current >= 0 && current < panes.size()) {
+    if (current >= 0 && current < panes.size() && !panes.at(current)->isMinimized()) {
         makeCurrent(panes.at(current));
         panes.at(current)->focusTerminal();
     }

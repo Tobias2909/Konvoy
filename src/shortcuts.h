@@ -9,6 +9,7 @@ namespace Shortcuts
 {
 inline const QKeySequence newPane{Qt::CTRL | Qt::SHIFT | Qt::Key_T};
 inline const QKeySequence closePane{Qt::CTRL | Qt::SHIFT | Qt::Key_W};
+inline const QKeySequence minimizePane{Qt::CTRL | Qt::SHIFT | Qt::Key_M};
 inline const QKeySequence toggleFocus{Qt::CTRL | Qt::SHIFT | Qt::Key_E};
 inline const QKeySequence moveLeft{Qt::CTRL | Qt::SHIFT | Qt::Key_Left};
 inline const QKeySequence moveRight{Qt::CTRL | Qt::SHIFT | Qt::Key_Right};
@@ -23,7 +24,7 @@ inline QKeySequence jumpTo(int number) // 1 to 9
 
 inline QList<QKeySequence> all()
 {
-    QList<QKeySequence> keys{newPane, closePane, toggleFocus, moveLeft, moveRight, moveUp, moveDown, equalSizes};
+    QList<QKeySequence> keys{newPane, closePane, minimizePane, toggleFocus, moveLeft, moveRight, moveUp, moveDown, equalSizes};
     for (int i = 1; i <= 9; ++i) {
         keys.append(jumpTo(i));
     }
