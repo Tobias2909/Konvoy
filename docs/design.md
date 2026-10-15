@@ -106,6 +106,15 @@ Each sidebar row shows the state icon, the `Alt` number, the account
 letter, the folder, the chat title and how long the pane has been in its
 state.
 
+A pane looks selected (card outline, accent line under its header) only
+while typing goes into it: the window is active and the pane has the keyboard
+focus. Another window, a dialog or a click on the sidebar's empty space leaves
+none selected, and the terminal cursor turns hollow. A pane that finishes
+while selected skips done and goes straight to idle; every other finish shows
+done, even for a single pane on screen. With none selected, the keys that
+close or move the current pane do nothing; focus mode keeps showing the pane
+that was selected last.
+
 ### Where the state comes from
 
 1. **Claude's terminal title.** Claude Code puts a status symbol in front of
@@ -166,6 +175,11 @@ milliseconds.
 A KDE notification for needs permission, question and done, but only when
 that pane is not on screen or the window is not focused. Clicking it jumps
 to the pane. No sound.
+
+Konvoy's taskbar icon carries the number of panes that are done or wait for
+a permission or an answer, sent with the `com.canonical.Unity.LauncherEntry`
+signal that Plasma's task manager shows. At 0, and when Konvoy closes, the
+number goes away.
 
 ## Usage block
 

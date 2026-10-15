@@ -13,6 +13,7 @@ class QTimer;
 
 // The list of pane cards. Clicking a card focuses its pane. Pressing and holding a
 // card (or dragging it) lifts it, and dropping it somewhere else moves the pane there.
+// A click on the empty space between and below the cards is reported as emptyClicked.
 class CardList : public QWidget
 {
     Q_OBJECT
@@ -27,6 +28,7 @@ Q_SIGNALS:
     void paneClicked(Pane *pane);
     void paneCloseRequested(Pane *pane);
     void paneMoved(Pane *pane, int index);
+    void emptyClicked();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -65,6 +67,7 @@ public:
 Q_SIGNALS:
     void paneClicked(Pane *pane);
     void paneCloseRequested(Pane *pane);
+    void emptyClicked();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -105,6 +108,10 @@ Q_SIGNALS:
     void paneClicked(Pane *pane);
     void paneCloseRequested(Pane *pane);
     void paneMoved(Pane *pane, int index);
+    void emptyClicked(); // the sidebar's empty space, with the left button
+
+protected:
+    void mousePressEvent(QMouseEvent *event) override;
 
 private:
     QWidget *m_full;

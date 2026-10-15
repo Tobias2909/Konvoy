@@ -37,6 +37,7 @@ public Q_SLOTS:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
 private:
     void setupShortcuts();
@@ -44,13 +45,17 @@ private:
     void saveSession();
     void setSidebarCollapsed(bool collapsed);
     Pane *paneById(const QString &id) const;
+    Pane *selectedPane() const;
     void adoptPane(Pane *pane);
     void makeCurrent(Pane *pane);
+    void updateSelection();
     void onFocusChanged(QWidget *old, QWidget *now);
     void onShortcutCheck(QKeyEvent *event, bool &override);
     void panesChanged();
     void onPaneState(Pane *pane, PaneState previous);
     void notify(Pane *pane);
+    void updateBadge();
+    void sendBadge(int count);
     void showPane(Pane *pane);
     void tickSpinner();
 
@@ -64,5 +69,6 @@ private:
     QTimer *m_saveTimer;
     bool m_restoring = false;
     bool m_closing = false;
+    int m_badgeCount = -1; // last number sent to the taskbar; -1 = none yet
     int m_sidebarWidth = 290;
 };

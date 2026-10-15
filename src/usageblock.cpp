@@ -289,7 +289,8 @@ bool UsageBlock::onResetTime(const QPointF &pos) const
 void UsageBlock::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() != Qt::LeftButton || !onResetTime(event->position())) {
-        return QWidget::mousePressEvent(event);
+        // Not the sidebar's empty space: the press stops here.
+        return;
     }
     m_timeLeft = !m_timeLeft;
     KConfigGroup g = m_config->state()->group(QStringLiteral("Usage"));

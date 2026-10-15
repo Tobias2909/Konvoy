@@ -250,6 +250,9 @@ void CardList::mousePressEvent(QMouseEvent *event)
 {
     const int i = cardAt(event->position().toPoint());
     if (i < 0) {
+        if (event->button() == Qt::LeftButton) {
+            Q_EMIT emptyClicked();
+        }
         return;
     }
     if (event->button() == Qt::LeftButton) {
@@ -418,6 +421,10 @@ void PaneStrip::mousePressEvent(QMouseEvent *event)
 {
     const int i = rowAt(event->position().toPoint());
     if (i < 0) {
+        // The usage bars at the bottom are not empty space.
+        if (event->button() == Qt::LeftButton && event->position().y() < usageTop() - 6) {
+            Q_EMIT emptyClicked();
+        }
         return;
     }
     if (event->button() == Qt::LeftButton) {
@@ -510,6 +517,7 @@ Sidebar::Sidebar(const Config *config, const UsageModel *usage, QWidget *parent)
     connect(m_cards, &CardList::paneClicked, this, &Sidebar::paneClicked);
     connect(m_cards, &CardList::paneCloseRequested, this, &Sidebar::paneCloseRequested);
     connect(m_cards, &CardList::paneMoved, this, &Sidebar::paneMoved);
+    connect(m_cards, &CardList::emptyClicked, this, &Sidebar::emptyClicked);
     auto *scroll = new QScrollArea(m_full);
     scroll->setWidget(m_cards);
     scroll->setWidgetResizable(true);
@@ -533,6 +541,7 @@ Sidebar::Sidebar(const Config *config, const UsageModel *usage, QWidget *parent)
     m_strip = new PaneStrip(config, usage, m_stripBox);
     connect(m_strip, &PaneStrip::paneClicked, this, &Sidebar::paneClicked);
     connect(m_strip, &PaneStrip::paneCloseRequested, this, &Sidebar::paneCloseRequested);
+    connect(m_strip, &PaneStrip::emptyClicked, this, &Sidebar::emptyClicked);
     stripLayout->addWidget(m_strip, 1);
     outer->addWidget(m_stripBox);
     m_stripBox->hide();
@@ -566,6 +575,14 @@ void Sidebar::setColumns(int columns)
 {
     for (QAction *a : m_columnsMenu->actions()) {
         a->setChecked(a->data().toInt() == columns);
+    }
+}
+
+void Sidebar::mousePressEvent(QMouseEvent *event)
+{
+    // Presses nothing else took: the space around the buttons.
+    if (event->button() == Qt::LeftButton) {
+        Q_EMIT emptyClicked();
     }
 }
 

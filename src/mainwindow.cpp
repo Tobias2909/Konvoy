@@ -9,6 +9,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDBusConnection>
+#include <QDBusMessage>
 #include <QDir>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -123,6 +125,11 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
         makeCurrent(pane);
         pane->focusTerminal();
     });
+    // Takes the keys away from the panes, which leaves none selected, so a finish
+    // keeps its "done" marker (see onPaneState).
+    connect(m_sidebar, &Sidebar::emptyClicked, this, [this] {
+        m_sidebar->setFocus(Qt::MouseFocusReason);
+    });
     connect(m_grid, &PaneGrid::focusModeChanged, m_sidebar, &Sidebar::setFocusMode);
     connect(m_grid, &PaneGrid::panesChanged, this, &MainWindow::panesChanged);
     connect(qApp, &QApplication::focusChanged, this, &MainWindow::onFocusChanged);
@@ -134,13 +141,19 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
 
     setupShortcuts();
     resize(1600, 1000);
+    // Clears a number a crashed Konvoy may have left on the taskbar icon.
+    updateBadge();
 }
 
 MainWindow::~MainWindow()
 {
     // Closing the window moves the focus once more; the slot must not run on a
-    // half destroyed window.
+    // half destroyed window. Nor may the panes' last signals (state changes, their
+    // own destruction), which come after this window's members are gone.
     disconnect(qApp, &QApplication::focusChanged, this, nullptr);
+    for (Pane *pane : m_grid->panes()) {
+        pane->disconnect(this);
+    }
 }
 
 void MainWindow::setupShortcuts()
@@ -162,23 +175,23 @@ void MainWindow::setupShortcuts()
         m_grid->setFocusMode(!m_grid->focusMode());
     });
     add(Shortcuts::moveLeft, [this] {
-        if (m_grid->current()) {
-            m_grid->movePane(m_grid->current(), -1);
+        if (Pane *pane = selectedPane()) {
+            m_grid->movePane(pane, -1);
         }
     });
     add(Shortcuts::moveRight, [this] {
-        if (m_grid->current()) {
-            m_grid->movePane(m_grid->current(), 1);
+        if (Pane *pane = selectedPane()) {
+            m_grid->movePane(pane, 1);
         }
     });
     add(Shortcuts::moveUp, [this] {
-        if (m_grid->current()) {
-            m_grid->movePaneVertically(m_grid->current(), -1);
+        if (Pane *pane = selectedPane()) {
+            m_grid->movePaneVertically(pane, -1);
         }
     });
     add(Shortcuts::moveDown, [this] {
-        if (m_grid->current()) {
-            m_grid->movePaneVertically(m_grid->current(), 1);
+        if (Pane *pane = selectedPane()) {
+            m_grid->movePaneVertically(pane, 1);
         }
     });
     add(Shortcuts::equalSizes, [this] {
@@ -197,10 +210,12 @@ void MainWindow::newPane()
     for (const Pane *pane : m_grid->panes()) {
         open.append(pane->sessionId());
     }
+    // The dialog takes the window's activation, and with it the selection.
+    const QPointer<Pane> selected = selectedPane();
     NewPaneDialog dialog(m_config, m_usage, open, this);
     if (dialog.exec() != QDialog::Accepted) {
-        if (m_grid->current()) {
-            m_grid->current()->focusTerminal();
+        if (selected) {
+            selected->focusTerminal();
         }
         return;
     }
@@ -232,6 +247,7 @@ void MainWindow::adoptPane(Pane *pane)
         if (Pane *dragged = paneById(draggedId)) {
             m_grid->swapPanes(dragged, pane);
             makeCurrent(dragged);
+            dragged->focusTerminal();
         }
     });
     connect(pane, &QObject::destroyed, this, [this, pane] {
@@ -251,7 +267,7 @@ void MainWindow::adoptPane(Pane *pane)
 
 void MainWindow::closeCurrentPane()
 {
-    closePane(m_grid->current());
+    closePane(selectedPane());
 }
 
 void MainWindow::closePane(Pane *pane)
@@ -259,6 +275,9 @@ void MainWindow::closePane(Pane *pane)
     if (!pane) {
         return;
     }
+    // With none selected, closing one keeps it that way. Asked before the question
+    // below takes the window's activation.
+    const bool selected = selectedPane() != nullptr;
     // Only a pane that works, waits for an answer or runs background tasks asks first.
     if (pane->isBusy()) {
         const PaneState state = pane->state();
@@ -276,7 +295,7 @@ void MainWindow::closePane(Pane *pane)
     }
     m_grid->removePane(pane);
     delete pane;
-    if (m_grid->current()) {
+    if (m_grid->current() && selected) {
         makeCurrent(m_grid->current());
         m_grid->current()->focusTerminal();
     }
@@ -293,25 +312,50 @@ void MainWindow::jumpTo(int number)
     pane->focusTerminal();
 }
 
+// The pane the grid works on (focus mode, Alt jumps). It looks selected only while
+// typing goes into it, which updateSelection keeps track of.
 void MainWindow::makeCurrent(Pane *pane)
 {
-    for (Pane *p : m_grid->panes()) {
-        p->setCurrent(p == pane);
-    }
     m_grid->setCurrent(pane);
+    updateSelection();
+}
+
+// A pane looks selected (card outline, accent line under its header) only while
+// the window is active and the pane has the keys. Another window, a dialog or a
+// click on the sidebar's empty space leaves none selected.
+void MainWindow::updateSelection()
+{
+    Pane *typing = nullptr;
+    if (isActiveWindow()) {
+        for (QWidget *w = QApplication::focusWidget(); w && !typing; w = w->parentWidget()) {
+            typing = qobject_cast<Pane *>(w);
+        }
+    }
+    if (typing) {
+        m_grid->setCurrent(typing);
+    }
+    for (Pane *p : m_grid->panes()) {
+        p->setCurrent(p == typing);
+    }
 }
 
 void MainWindow::onFocusChanged(QWidget *, QWidget *now)
 {
+    updateSelection();
     for (QWidget *w = now; w; w = w->parentWidget()) {
         if (auto *pane = qobject_cast<Pane *>(w)) {
-            if (!pane->isCurrent()) {
-                makeCurrent(pane);
-            }
             pane->markSeen();
             return;
         }
     }
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::ActivationChange) {
+        updateSelection();
+    }
+    QWidget::changeEvent(event);
 }
 
 void MainWindow::onPaneState(Pane *pane, PaneState)
@@ -319,8 +363,11 @@ void MainWindow::onPaneState(Pane *pane, PaneState)
     const PaneState state = pane->state();
     const bool onScreen = isActiveWindow() && pane->isVisible();
 
-    // Finishing in front of the user's eyes needs no "done" marker.
-    if (state == PaneState::Done && onScreen && pane->isCurrent()) {
+    // Finishing in front of the user's eyes needs no "done" marker. In front of the
+    // eyes means the pane has the keys, so a click on the sidebar's empty space
+    // keeps the marker even for the only pane.
+    const QWidget *focus = QApplication::focusWidget();
+    if (state == PaneState::Done && onScreen && focus && pane->isAncestorOf(focus)) {
         pane->markSeen();
         return;
     }
@@ -349,6 +396,34 @@ void MainWindow::onPaneState(Pane *pane, PaneState)
         m_spinner->stop();
     }
     m_sidebar->refresh();
+    updateBadge();
+}
+
+void MainWindow::updateBadge()
+{
+    // The panes that are done or wait for an answer, while the window closes no more.
+    if (m_closing) {
+        return;
+    }
+    int count = 0;
+    for (const Pane *p : m_grid->panes()) {
+        count += p->state() == PaneState::Done || Theme::needsYou(p->state()) ? 1 : 0;
+    }
+    if (count != m_badgeCount) {
+        sendBadge(count);
+    }
+}
+
+void MainWindow::sendBadge(int count)
+{
+    // The launcher entry signal: Plasma's task manager shows the count on the icon.
+    QDBusMessage update = QDBusMessage::createSignal(QStringLiteral("/io/github/tobias2909/konvoy/launcher"),
+                                                     QStringLiteral("com.canonical.Unity.LauncherEntry"),
+                                                     QStringLiteral("Update"));
+    update << QStringLiteral("application://io.github.tobias2909.konvoy.desktop")
+           << QVariantMap{{QStringLiteral("count"), qint64(count)}, {QStringLiteral("count-visible"), count > 0}};
+    QDBusConnection::sessionBus().send(update);
+    m_badgeCount = count;
 }
 
 void MainWindow::notify(Pane *pane)
@@ -413,6 +488,7 @@ void MainWindow::onShortcutCheck(QKeyEvent *event, bool &override)
 void MainWindow::panesChanged()
 {
     m_sidebar->setPanes(m_grid->panes());
+    updateBadge();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -440,7 +516,18 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // an empty layout behind.
     saveSession();
     m_closing = true;
+    if (m_badgeCount > 0) {
+        sendBadge(0);
+    }
     event->accept();
+}
+
+// The pane the keys and the shortcuts act on; none after a click on the sidebar's
+// empty space.
+Pane *MainWindow::selectedPane() const
+{
+    Pane *pane = m_grid->current();
+    return pane && pane->isCurrent() ? pane : nullptr;
 }
 
 Pane *MainWindow::paneById(const QString &id) const

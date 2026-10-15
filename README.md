@@ -21,7 +21,12 @@ the background and one is still at work.*
 * A card per session in the sidebar with its state, whether it works, waits
   for a permission or an answer, is done, still has tasks running in the
   background or has ended
+* A session only looks selected while your typing goes into it. A click on the
+  sidebar's empty space deselects them all, so one that finishes in plain
+  sight still shows done
 * A notification when a session out of sight needs you
+* A number on Konvoy's taskbar icon counts the sessions that are done or wait
+  for you
 * Several Claude accounts side by side, each in its own colour. Every new
   session asks which account to use
 * The 5 hour and 7 day usage of every account with its reset times. A click on
