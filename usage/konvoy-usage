@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Konvoy's usage helper: the plan usage of every account in one JSON file.
 
-  konvoy-usage --output FILE --account KEY=CONFIG_DIR [--account ...]
+  konvoy-usage --output FILE --account KEY=CONFIG_DIR [--account ...] [--keep FILE]
                [--extra-command CMD] [--extra-interval 900] [--once]
 
 It sends no requests. Every number comes from Claude Code itself.
@@ -15,6 +15,10 @@ one exists for an account, its numbers are live.
 
 Without such a file the account shows the numbers Claude Code saved last in its
 own state file, or the last ones this helper had.
+
+The output file usually sits in the runtime folder, which a reboot empties. With
+--keep the helper also writes the same document to a file on disk, but only when
+the numbers change, and starts from it when the output file is gone.
 
 The extra command, when given, runs every extra interval and prints JSON in the
 form {"accounts": {"<config dir>": {...}}}. Those fields land under "extra" for
@@ -135,10 +139,10 @@ class Account:
                 "limits": self.limits or {}, "extra": self.extra or {}}
 
 
-def resume(output, accounts):
+def resume(output, keep, accounts):
     """Start from the last file, so a restart shows numbers at once and keeps the
     extra fields until the extra command runs again. Returns when it last ran."""
-    doc = read_json(output)
+    doc = read_json(output) or (read_json(keep) if keep else {})
     previous = doc.get("accounts") or {}
     for acc in accounts:
         old = previous.get(acc.key) or {}
@@ -195,6 +199,7 @@ def main():
     ap = argparse.ArgumentParser(description="Collect the plan usage Claude Code reports into one JSON file.")
     ap.add_argument("--output", required=True)
     ap.add_argument("--account", action="append", default=[], metavar="KEY=CONFIG_DIR")
+    ap.add_argument("--keep", default="", help="a copy on disk that outlives a reboot")
     ap.add_argument("--extra-command", default="")
     ap.add_argument("--extra-interval", type=int, default=900)
     ap.add_argument("--once", action="store_true", help="collect once, write and exit")
@@ -207,8 +212,9 @@ def main():
             ap.error(f"--account expects KEY=CONFIG_DIR, got {spec!r}")
         accounts.append(Account(key, config_dir))
     output = Path(args.output)
+    keep = Path(os.path.expanduser(args.keep)) if args.keep else None
     reports = output.parent / "statusline"
-    extra_at = resume(output, accounts)
+    extra_at = resume(output, keep, accounts)
     extra_interval = max(args.extra_interval, 60)
     parent = os.getppid()
     next_extra = extra_at + extra_interval if extra_at else time.time()
@@ -225,7 +231,14 @@ def main():
         body = {acc.key: acc.document() for acc in accounts}
         # Written at least every HEARTBEAT_S, so a reader can tell the helper runs.
         if (body, extra_at) != written or now - written_at >= HEARTBEAT_S:
-            write(output, {"version": 2, "written": time.time(), "extra_at": extra_at, "accounts": body})
+            doc = {"version": 2, "written": time.time(), "extra_at": extra_at, "accounts": body}
+            write(output, doc)
+            # The disk copy skips the heartbeat.
+            if keep and (body, extra_at) != written:
+                try:
+                    write(keep, doc)
+                except OSError as err:
+                    log(f"cannot keep the numbers in {keep}: {err}")
             written, written_at = (body, extra_at), now
         if args.once or os.getppid() != parent:
             return 0

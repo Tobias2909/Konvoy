@@ -82,7 +82,8 @@ void UsageModel::startHelper(const Config *config)
     for (const QString &name : reports.entryList({QStringLiteral("*.json")}, QDir::Files)) {
         reports.remove(name);
     }
-    QStringList args{QStringLiteral("--output"), filePath()};
+    // The usage file sits in the runtime folder, which a reboot empties; the kept copy does not.
+    QStringList args{QStringLiteral("--output"), filePath(), QStringLiteral("--keep"), config->usageKeepFile()};
     for (const Account &account : config->accounts()) {
         args << QStringLiteral("--account") << account.key + QLatin1Char('=') + account.configDir;
     }

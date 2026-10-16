@@ -236,7 +236,14 @@ row says from when the numbers are.
   its numbers count as live.
 * **Saved numbers.** Without such a file the helper takes the numbers Claude
   Code saved in its own state file (`cachedUsageUtilization`), or the last
-  ones it had. They can be hours old, hence the dimmed bars and the time.
+  ones it had, whichever are newer. They can be hours old, hence the dimmed
+  bars and the time. Claude Code saves its numbers only when `/usage` is
+  opened, so they can also be days old.
+* **Kept on disk.** A reboot empties the runtime folder, so the helper also
+  writes its file to `konvoy-usage.json` in the XDG state folder
+  (`~/.local/state`), only when the numbers change, and starts from it when
+  `usage.json` is gone. A config given with `--config` keeps it as
+  `<file>.usage.json` instead.
 * **Extra command.** `[Usage] ExtraCommand` runs every `ExtraInterval`
   seconds (900 by default). The file keeps when it last ran, so restarting
   Konvoy does not run it again early. It prints

@@ -90,8 +90,9 @@ printf '%s' "$input" | ~/.local/lib/libexec/konvoy-statusline
 
 Without a status line of your own, `~/.local/lib/libexec/konvoy-statusline` can
 be the whole status line command. It prints nothing. An account without an
-open session shows the numbers Claude Code saved last, dimmed and with their
-time.
+open session shows the last numbers Konvoy saw, kept in `~/.local/state` so
+they outlive a reboot, or the ones Claude Code saved when those are newer,
+dimmed and with their time.
 
 ## Not an official anything
 

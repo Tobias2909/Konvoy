@@ -3,6 +3,7 @@
 #include <KConfigGroup>
 #include <QDir>
 #include <QFileInfo>
+#include <QStandardPaths>
 
 namespace
 {
@@ -24,6 +25,8 @@ Config::Config(const QString &file)
     // A test config keeps its own state, so it never reopens the real panes.
     m_state = file.isEmpty() ? KSharedConfig::openStateConfig(QStringLiteral("konvoystaterc"))
                              : KSharedConfig::openConfig(QFileInfo(file).absoluteFilePath() + QStringLiteral(".state"), KConfig::SimpleConfig);
+    m_usageKeep = file.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::GenericStateLocation) + QStringLiteral("/konvoy-usage.json")
+                                 : QFileInfo(file).absoluteFilePath() + QStringLiteral(".usage.json");
     loadAccounts();
 }
 

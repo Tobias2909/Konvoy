@@ -38,6 +38,9 @@ public:
     // [Usage]
     QString usageExtraCommand() const;  // optional, adds fields such as resets
     int usageExtraInterval() const;
+    // The usage helper's copy on disk: konvoy-usage.json in the XDG state folder,
+    // or "<file>.usage.json" next to a config given with --config.
+    QString usageKeepFile() const { return m_usageKeep; }
 
     // Window layout and panes of the last run: konvoystaterc in the XDG state folder,
     // or "<file>.state" next to a config given with --config.
@@ -53,5 +56,6 @@ private:
 
     KSharedConfigPtr m_config;
     KSharedConfigPtr m_state;
+    QString m_usageKeep;
     QList<Account> m_accounts;
 };
