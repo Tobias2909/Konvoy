@@ -148,23 +148,30 @@ cannot take away that pane's done.
 
    | Hook | Meaning |
    |---|---|
-   | `SessionStart` | session id (for restart and restore), idle; not after a compact |
+   | `SessionStart` | session id (for restart and restore), idle |
    | `UserPromptSubmit` | a new turn starts |
    | `PermissionRequest` | needs permission (question for `AskUserQuestion` and `ExitPlanMode`) |
-   | `PreToolUse` on `AskUserQuestion` or `ExitPlanMode` | question, unless it has an `agent_id` |
+   | `PreToolUse` on `AskUserQuestion` or `ExitPlanMode` | question |
    | `Notification` | `permission_prompt` and MCP elicitation dialogs as a backup |
    | `Stop`, `StopFailure` | done, or in background while its `background_tasks` list is not empty |
    | `SessionEnd` | exited |
 
    The script also passes the session's `CLAUDE_CONFIG_DIR`, so the account
-   badge follows `/switch` right away. A `PreToolUse` with an `agent_id` comes
-   from a subagent or from a hidden copy of the chat that Claude Code runs by
-   itself, such as the one that suggests the next prompt after a turn. Those
-   copies refuse every tool after the hook ran, so their question never
-   shows; the script drops the event. A question that does show also fires
-   `PermissionRequest`. A compact fires `SessionStart` too, but the session
-   goes on in the same process with its background tasks, so the script drops
-   that one as well.
+   badge follows `/switch` right away. It leaves out events that say nothing
+   about the pane's own chat:
+
+   - `PreToolUse`, `PermissionRequest` and `StopFailure` with an `agent_id`.
+     They come from a subagent or from a hidden copy of the chat that Claude
+     Code runs by itself, such as the one that suggests the next prompt after
+     a turn. Copies and background agents may not show dialogs: they run these
+     hooks and are then refused, so nothing waits on screen. A dialog that does
+     show, also a subagent's, fires `Notification` after about 6 seconds,
+     which has no `agent_id`. Their API errors do not end the chat's turn.
+   - `SessionStart` after a compact: the session goes on in the same process,
+     with its background tasks.
+   - Every event from a claude that runs inside another one in the pane, such
+     as a `claude -p` that a chat starts. It inherits the pane's environment
+     but is not the pane's chat.
 3. **The processes.** Every 2 seconds a pane checks whether its claude process
    is still the same. A new one means an account switch, none means exited.
    When a background task ends, Claude starts a turn by itself (it fires

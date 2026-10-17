@@ -3,7 +3,8 @@
 #   time  event  session_id  tool_name  notification_type  config_dir  background_tasks
 # background_tasks is only set on Stop: the kinds of the tasks that still run, such as
 # "shell,subagent". Outside a Konvoy pane, or when Konvoy is gone, it does
-# nothing. It prints nothing, because SessionStart and UserPromptSubmit output would
+# nothing, and it leaves out events that say nothing about the pane's own chat (see
+# below). It prints nothing, because SessionStart and UserPromptSubmit output would
 # land in Claude's context.
 
 file="${XDG_RUNTIME_DIR:-/run/user/$UID}/konvoy/events/${KONVOY_PANE:-none}"
@@ -23,18 +24,42 @@ else
     cat >/dev/null
 fi
 
+# A claude started inside a pane, such as a claude -p that a chat runs, inherits
+# KONVOY_PANE. Only the pane's own claude counts, so an event from a claude that has
+# another one above it on the way up to Konvoy is left out. The walk stops at Konvoy,
+# because Konvoy itself may have been started from a chat.
+claudes=0
+pid=$PPID
+while [ "$pid" -gt 1 ] && read -r comm 2>/dev/null <"/proc/$pid/comm"; do
+    [ "$comm" = konvoy ] && break
+    [ "$comm" = claude ] && claudes=$((claudes + 1))
+    read -r stat 2>/dev/null <"/proc/$pid/stat" || break
+    stat=${stat##*) }
+    stat=${stat#* }
+    pid=${stat%% *}
+done
+if [ "$claudes" -gt 1 ]; then
+    exit 0
+fi
+
 field() {
     local re="\"$1\": ?\"([^\"]*)\""
     [[ $head =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"
 }
 
 # Subagents and the hidden copies of the chat that Claude Code runs on its own, such
-# as the one that suggests the next prompt after a turn, send an agent_id. Those
-# copies refuse every tool after this hook ran, so their question never shows. A
-# question that does show also fires PermissionRequest, which is kept.
-if [ "$1" = PreToolUse ] && [ -n "$(field agent_id)" ]; then
-    exit 0
-fi
+# as the one that suggests the next prompt after a turn, send an agent_id. Copies and
+# background agents may not show dialogs: they run the question and permission hooks
+# and are then refused, so nothing waits on screen. A dialog that does show, also a
+# subagent's, fires Notification after about 6 seconds, which has no agent_id. Their
+# API errors (StopFailure) do not end the chat's turn either.
+case $1 in
+PreToolUse | PermissionRequest | StopFailure)
+    if [ -n "$(field agent_id)" ]; then
+        exit 0
+    fi
+    ;;
+esac
 
 # A compact, by hand or automatic, starts the same session again in the same process.
 # Its background tasks keep running and a turn may go on, so the pane keeps its state.
