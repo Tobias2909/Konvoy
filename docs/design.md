@@ -148,7 +148,7 @@ cannot take away that pane's done.
 
    | Hook | Meaning |
    |---|---|
-   | `SessionStart` | session id (for restart and restore), idle |
+   | `SessionStart` | session id (for restart and restore), idle; not after a compact |
    | `UserPromptSubmit` | a new turn starts |
    | `PermissionRequest` | needs permission (question for `AskUserQuestion` and `ExitPlanMode`) |
    | `PreToolUse` on `AskUserQuestion` or `ExitPlanMode` | question, unless it has an `agent_id` |
@@ -162,7 +162,9 @@ cannot take away that pane's done.
    itself, such as the one that suggests the next prompt after a turn. Those
    copies refuse every tool after the hook ran, so their question never
    shows; the script drops the event. A question that does show also fires
-   `PermissionRequest`.
+   `PermissionRequest`. A compact fires `SessionStart` too, but the session
+   goes on in the same process with its background tasks, so the script drops
+   that one as well.
 3. **The processes.** Every 2 seconds a pane checks whether its claude process
    is still the same. A new one means an account switch, none means exited.
    When a background task ends, Claude starts a turn by itself (it fires

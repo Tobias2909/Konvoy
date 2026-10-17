@@ -36,6 +36,12 @@ if [ "$1" = PreToolUse ] && [ -n "$(field agent_id)" ]; then
     exit 0
 fi
 
+# A compact, by hand or automatic, starts the same session again in the same process.
+# Its background tasks keep running and a turn may go on, so the pane keeps its state.
+if [ "$1" = SessionStart ] && [ "$(field source)" = compact ]; then
+    exit 0
+fi
+
 # Quotes inside JSON strings are escaped, so "type":"..." only matches real keys.
 tasks=
 if [[ $input == *'"background_tasks":['* ]]; then
