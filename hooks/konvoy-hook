@@ -28,6 +28,14 @@ field() {
     [[ $head =~ $re ]] && printf '%s' "${BASH_REMATCH[1]}"
 }
 
+# Subagents and the hidden copies of the chat that Claude Code runs on its own, such
+# as the one that suggests the next prompt after a turn, send an agent_id. Those
+# copies refuse every tool after this hook ran, so their question never shows. A
+# question that does show also fires PermissionRequest, which is kept.
+if [ "$1" = PreToolUse ] && [ -n "$(field agent_id)" ]; then
+    exit 0
+fi
+
 # Quotes inside JSON strings are escaped, so "type":"..." only matches real keys.
 tasks=
 if [[ $input == *'"background_tasks":['* ]]; then

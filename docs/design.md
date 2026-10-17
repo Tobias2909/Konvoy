@@ -151,13 +151,18 @@ cannot take away that pane's done.
    | `SessionStart` | session id (for restart and restore), idle |
    | `UserPromptSubmit` | a new turn starts |
    | `PermissionRequest` | needs permission (question for `AskUserQuestion` and `ExitPlanMode`) |
-   | `PreToolUse` on `AskUserQuestion` or `ExitPlanMode` | question |
+   | `PreToolUse` on `AskUserQuestion` or `ExitPlanMode` | question, unless it has an `agent_id` |
    | `Notification` | `permission_prompt` and MCP elicitation dialogs as a backup |
    | `Stop`, `StopFailure` | done, or in background while its `background_tasks` list is not empty |
    | `SessionEnd` | exited |
 
    The script also passes the session's `CLAUDE_CONFIG_DIR`, so the account
-   badge follows `/switch` right away.
+   badge follows `/switch` right away. A `PreToolUse` with an `agent_id` comes
+   from a subagent or from a hidden copy of the chat that Claude Code runs by
+   itself, such as the one that suggests the next prompt after a turn. Those
+   copies refuse every tool after the hook ran, so their question never
+   shows; the script drops the event. A question that does show also fires
+   `PermissionRequest`.
 3. **The processes.** Every 2 seconds a pane checks whether its claude process
    is still the same. A new one means an account switch, none means exited.
    When a background task ends, Claude starts a turn by itself (it fires
