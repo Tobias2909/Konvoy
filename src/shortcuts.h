@@ -16,6 +16,7 @@ inline const QKeySequence moveRight{Qt::CTRL | Qt::SHIFT | Qt::Key_Right};
 inline const QKeySequence moveUp{Qt::CTRL | Qt::SHIFT | Qt::Key_Up};
 inline const QKeySequence moveDown{Qt::CTRL | Qt::SHIFT | Qt::Key_Down};
 inline const QKeySequence equalSizes{Qt::CTRL | Qt::SHIFT | Qt::Key_0};
+inline const QKeySequence toggleSound{Qt::CTRL | Qt::SHIFT | Qt::Key_B};
 
 inline QKeySequence jumpTo(int number) // 1 to 9
 {
@@ -24,7 +25,7 @@ inline QKeySequence jumpTo(int number) // 1 to 9
 
 inline QList<QKeySequence> all()
 {
-    QList<QKeySequence> keys{newPane, closePane, minimizePane, toggleFocus, moveLeft, moveRight, moveUp, moveDown, equalSizes};
+    QList<QKeySequence> keys{newPane, closePane, minimizePane, toggleFocus, moveLeft, moveRight, moveUp, moveDown, equalSizes, toggleSound};
     for (int i = 1; i <= 9; ++i) {
         keys.append(jumpTo(i));
     }

@@ -17,3 +17,9 @@ Action=Popup
 Name=Done
 Comment=A Claude Code session finished its turn
 Action=Popup
+
+[Event/sound]
+Name=Sound when a session stops
+Comment=Plays while the sound button in the sidebar is on
+Action=Sound
+Sound=completion-success

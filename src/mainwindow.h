@@ -56,6 +56,8 @@ private:
     void panesChanged();
     void onPaneState(Pane *pane, PaneState previous);
     void notify(Pane *pane);
+    void setSound(bool on);
+    void playSound();
     void updateBadge();
     void sendBadge(int count);
     void showPane(Pane *pane);
@@ -72,5 +74,8 @@ private:
     bool m_restoring = false;
     bool m_closing = false;
     int m_badgeCount = -1; // last number sent to the taskbar; -1 = none yet
+    bool m_sound = false;  // a sound when a pane stops working
+    qint64 m_soundAt = 0;  // when the last one played
+    KNotification *m_soundEvent = nullptr;
     int m_sidebarWidth = 290;
 };

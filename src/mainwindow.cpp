@@ -9,6 +9,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDateTime>
 #include <QDBusConnection>
 #include <QDBusMessage>
 #include <QDir>
@@ -56,6 +57,12 @@ QList<QList<int>> decodeSizes(const QString &text)
         sizes.append(list);
     }
     return sizes;
+}
+
+// Claude has stopped working in a pane: finished, or waiting for an answer.
+bool stopped(PaneState state)
+{
+    return state == PaneState::Done || state == PaneState::Idle || Theme::needsYou(state);
 }
 
 QString describe(const Pane *pane)
@@ -132,6 +139,9 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
     connect(m_sidebar, &Sidebar::emptyClicked, this, [this] {
         m_sidebar->setFocus(Qt::MouseFocusReason);
     });
+    connect(m_sidebar, &Sidebar::soundToggled, this, &MainWindow::setSound);
+    m_sound = m_config->state()->group(QStringLiteral("Notifications")).readEntry("Sound", false);
+    m_sidebar->setSound(m_sound);
     connect(m_grid, &PaneGrid::focusModeChanged, m_sidebar, &Sidebar::setFocusMode);
     connect(m_grid, &PaneGrid::panesChanged, this, &MainWindow::panesChanged);
     connect(qApp, &QApplication::focusChanged, this, &MainWindow::onFocusChanged);
@@ -201,6 +211,9 @@ void MainWindow::setupShortcuts()
     });
     add(Shortcuts::equalSizes, [this] {
         m_grid->equalizeSizes();
+    });
+    add(Shortcuts::toggleSound, [this] {
+        setSound(!m_sound);
     });
     for (int i = 1; i <= 9; ++i) {
         add(Shortcuts::jumpTo(i), [this, i] {
@@ -407,10 +420,22 @@ void MainWindow::changeEvent(QEvent *event)
     QWidget::changeEvent(event);
 }
 
-void MainWindow::onPaneState(Pane *pane, PaneState)
+void MainWindow::onPaneState(Pane *pane, PaneState previous)
 {
     const PaneState state = pane->state();
     const bool onScreen = isActiveWindow() && pane->isVisible();
+
+    // The sound plays for every pane that stops working, in sight or not: Konvoy
+    // cannot tell whether anyone is at the desk. The button decides that. As with
+    // notifications, only a stop that holds for a moment counts.
+    if (m_sound && (previous == PaneState::Working || previous == PaneState::Background) && stopped(state)) {
+        QPointer<Pane> target(pane);
+        QTimer::singleShot(1500, this, [this, target] {
+            if (m_sound && target && stopped(target->state())) {
+                playSound();
+            }
+        });
+    }
 
     // Finishing in front of the user's eyes needs no "done" marker. In front of the
     // eyes means the pane has the keys, so a click on the sidebar's empty space
@@ -503,6 +528,34 @@ void MainWindow::notify(Pane *pane)
     });
     m_notifications.insert(pane, n);
     n->sendEvent();
+}
+
+void MainWindow::setSound(bool on)
+{
+    m_sound = on;
+    m_sidebar->setSound(on);
+    KConfigGroup g = m_config->state()->group(QStringLiteral("Notifications"));
+    g.writeEntry("Sound", on);
+    g.sync();
+}
+
+void MainWindow::playSound()
+{
+    // Panes that stop together get one sound.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_soundAt < 2000) {
+        return;
+    }
+    m_soundAt = now;
+    // A notification event that only plays a sound (konvoy.notifyrc), so the sound
+    // can be changed in the system's notification settings. Without a popup nothing
+    // ever closes such a notification, so one is made for the whole run and sent
+    // again for every sound; KNotifications keeps a pointer to it, it is never deleted.
+    if (!m_soundEvent) {
+        m_soundEvent = new KNotification(QStringLiteral("sound"));
+        m_soundEvent->setAutoDelete(false);
+    }
+    m_soundEvent->sendEvent();
 }
 
 void MainWindow::showPane(Pane *pane)

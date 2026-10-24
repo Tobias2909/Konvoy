@@ -91,6 +91,7 @@ hook reports the config dir it sees, and the pane follows.
 | `Ctrl+Shift+M` | minimize pane |
 | `Ctrl+Shift+Left/Right` | move pane |
 | `Ctrl+Shift+0` | equal sizes |
+| `Ctrl+Shift+B` | sound on or off |
 
 Copy, paste and search come from the embedded Konsole terminal.
 
@@ -209,7 +210,21 @@ milliseconds.
 A KDE notification for needs permission, question and done, but only when
 that pane is not on screen (hidden by focus mode or minimized) or the window
 is not focused. Clicking it jumps to the pane and brings a minimized one
-back. No sound.
+back. The notification itself makes no sound.
+
+**Sound**, for stepping away from the screen while Claude works: the speaker
+button in the sidebar's toolbar (also under the expand button of the collapsed
+strip) or `Ctrl+Shift+B` turns it on and off, and the choice is kept for the
+next start. It is off at first. While it is on, a short sound plays when a
+pane stops working, that is when it goes from working or in background to
+done, needs permission or question. It plays whether the pane is on screen or
+not, since Konvoy cannot tell whether anyone is at the desk. In background
+itself plays nothing, the done after the last task does. As with
+notifications the stop must hold for 1.5 seconds, and panes that stop within
+2 seconds of each other share one sound. The sound is the `sound` event in
+`konvoy.notifyrc` (`completion-success` from the sound theme), so it can be
+changed in KDE's notification settings for Konvoy. Do Not Disturb does not
+silence it, turning off the system sounds does.
 
 Konvoy's taskbar icon carries the number of panes that are done or wait for
 a permission or an answer, sent with the `com.canonical.Unity.LauncherEntry`

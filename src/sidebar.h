@@ -99,6 +99,7 @@ public:
     void refresh();
     void setFocusMode(bool on);
     void setColumns(int columns);
+    void setSound(bool on);
     bool isCollapsed() const { return m_collapsed; }
     void setCollapsed(bool collapsed);
     // Scrolls the card list so the pane's card is in view.
@@ -109,6 +110,7 @@ Q_SIGNALS:
     void focusModeToggled(bool on);
     void equalSizesRequested();
     void columnsRequested(int columns);
+    void soundToggled(bool on);
     void collapseRequested(bool collapsed);
     void paneClicked(Pane *pane);
     void paneCloseRequested(Pane *pane);
@@ -131,6 +133,8 @@ private:
     CardList *m_cards;
     PaneStrip *m_strip;
     QToolButton *m_focusButton;
+    QToolButton *m_soundButton;
+    QToolButton *m_stripSoundButton;
     QMenu *m_columnsMenu;
     bool m_collapsed = false;
     int m_wheel = 0; // wheel turn not yet used up, in eighths of a degree

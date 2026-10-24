@@ -552,6 +552,11 @@ Sidebar::Sidebar(const Config *config, const UsageModel *usage, QWidget *parent)
     }
     columnsButton->setMenu(m_columnsMenu);
     bar->addWidget(columnsButton);
+
+    m_soundButton = toolButton(QString(), QString(), m_full);
+    m_soundButton->setCheckable(true);
+    connect(m_soundButton, &QToolButton::toggled, this, &Sidebar::soundToggled);
+    bar->addWidget(m_soundButton);
     bar->addStretch();
 
     auto *collapseButton = toolButton(QStringLiteral("sidebar-collapse-left"), QStringLiteral("Collapse the sidebar"), m_full);
@@ -588,6 +593,10 @@ Sidebar::Sidebar(const Config *config, const UsageModel *usage, QWidget *parent)
         Q_EMIT collapseRequested(false);
     });
     stripLayout->addWidget(expandButton, 0, Qt::AlignHCenter);
+    m_stripSoundButton = toolButton(QString(), QString(), m_stripBox);
+    m_stripSoundButton->setCheckable(true);
+    connect(m_stripSoundButton, &QToolButton::toggled, this, &Sidebar::soundToggled);
+    stripLayout->addWidget(m_stripSoundButton, 0, Qt::AlignHCenter);
     m_strip = new PaneStrip(config, usage, m_stripBox);
     connect(m_strip, &PaneStrip::paneClicked, this, &Sidebar::paneClicked);
     connect(m_strip, &PaneStrip::paneCloseRequested, this, &Sidebar::paneCloseRequested);
@@ -595,6 +604,7 @@ Sidebar::Sidebar(const Config *config, const UsageModel *usage, QWidget *parent)
     stripLayout->addWidget(m_strip, 1);
     outer->addWidget(m_stripBox);
     m_stripBox->hide();
+    setSound(false);
 
     // Durations on the cards ("4m") move on by themselves.
     auto *timer = new QTimer(this);
@@ -625,6 +635,18 @@ void Sidebar::setColumns(int columns)
 {
     for (QAction *a : m_columnsMenu->actions()) {
         a->setChecked(a->data().toInt() == columns);
+    }
+}
+
+void Sidebar::setSound(bool on)
+{
+    // The speaker shows whether a session that stops plays a sound, in both the
+    // expanded and the collapsed sidebar.
+    for (QToolButton *b : {m_soundButton, m_stripSoundButton}) {
+        const QSignalBlocker blocker(b);
+        b->setChecked(on);
+        b->setIcon(QIcon::fromTheme(on ? QStringLiteral("audio-volume-high") : QStringLiteral("audio-volume-muted")));
+        b->setToolTip(on ? QStringLiteral("Sound when a session stops: on (Ctrl+Shift+B)") : QStringLiteral("Sound when a session stops: off (Ctrl+Shift+B)"));
     }
 }
 

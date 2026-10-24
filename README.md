@@ -27,6 +27,9 @@ the background and one is still at work.*
 * A notification when a session out of sight needs you
 * A number on Konvoy's taskbar icon counts the sessions that are done or wait
   for you
+* A sound when a session stops working, for when you step away from the
+  screen. The speaker button in the sidebar or `Ctrl+Shift+B` turns it on and
+  off
 * Several Claude accounts side by side, each in its own colour. Every new
   session asks which account to use
 * The 5 hour and 7 day usage of every account with its reset times. A click on
