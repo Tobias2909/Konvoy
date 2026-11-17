@@ -162,6 +162,5 @@ private:
     qint64 m_dialogAt = 0;       // when the last permission or question hook ran
     qint64 m_answerKeyAt = 0;
     QStringList m_backgroundTasks;
-    qint64 m_stopAt = 0;         // last Stop
     int m_quietChecks = 0;       // checks in a row without a background shell
 };

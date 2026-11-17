@@ -542,10 +542,11 @@ void Pane::setCaption(const QString &caption)
         // stays; the next still symbol brings it back.
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
         m_workingSince = now;
-        // In the same way a spin reported just after Stop is the finished turn's own.
         const bool lateDialog = Theme::needsYou(m_hookState) && now - m_dialogAt < 1500;
-        const bool lateTurn = m_hookState == PaneState::Background && now - m_stopAt < 3000;
-        if (!lateDialog && !lateTurn) {
+        // Background stays too. Every turn starts with UserPromptSubmit, so a spin
+        // without one is a /compact or the late report of the turn that just ended,
+        // and the tasks still run when it stops.
+        if (!lateDialog && m_hookState != PaneState::Background) {
             m_hookState = PaneState::Working;
         }
         m_seen = false;
@@ -647,7 +648,6 @@ void Pane::applyEvent(const QStringList &fields)
         // end, so the pane is not done yet. That next turn's Stop updates the list.
         m_backgroundTasks = userTasks(fields.value(6));
         m_hookState = m_backgroundTasks.isEmpty() ? PaneState::Done : PaneState::Background;
-        m_stopAt = ok ? at : QDateTime::currentMSecsSinceEpoch();
         m_seen = false;
     } else if (event == QLatin1String("SessionEnd")) {
         m_exited = true;

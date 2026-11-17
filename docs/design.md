@@ -143,7 +143,10 @@ cannot take away that pane's done.
    otherwise. A spinning symbol means working, a still one means the turn is
    over or Claude waits for an answer. This also catches an interrupt with
    Esc, which no hook reports. Konsole reports title changes about 2 seconds
-   late, so states follow with that delay.
+   late, so states follow with that delay. A spin alone does not end the in
+   background state: every turn starts with `UserPromptSubmit`, while a
+   `/compact` spins without any hook. The pane shows working while it spins
+   and goes back to in background after.
 2. **Hooks** say what Claude waits for. Konvoy's hook script appends one line
    per event to `$XDG_RUNTIME_DIR/konvoy/events/<pane>`, which Konvoy watches:
 
