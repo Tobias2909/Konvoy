@@ -12,7 +12,6 @@ class QComboBox;
 class QTimer;
 class QDialogButtonBox;
 class QLineEdit;
-class QLabel;
 
 // One account in the dialog: badge, name and its usage.
 class AccountButton : public QAbstractButton
@@ -41,12 +40,18 @@ class FolderList : public QListWidget
     Q_OBJECT
 public:
     explicit FolderList(QWidget *parent = nullptr);
+    // Shown instead of the folders while set (e.g. why the list is greyed out).
+    void setMessage(const QString &message);
 
 Q_SIGNALS:
     void starClicked(const QString &folder);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
+
+private:
+    QString m_message;
 };
 
 class NewPaneDialog : public QDialog
@@ -79,5 +84,4 @@ private:
     QStringList m_openSessions;
     QDialogButtonBox *m_buttons;
     QList<QWidget *> m_folderParts; // greyed out while a program is chosen
-    QLabel *m_programHint;
 };

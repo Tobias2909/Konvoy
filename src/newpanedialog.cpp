@@ -118,6 +118,23 @@ void FolderList::mousePressEvent(QMouseEvent *event)
     QListWidget::mousePressEvent(event);
 }
 
+void FolderList::setMessage(const QString &message)
+{
+    m_message = message;
+    viewport()->update();
+}
+
+void FolderList::paintEvent(QPaintEvent *event)
+{
+    if (m_message.isEmpty()) {
+        QListWidget::paintEvent(event);
+        return;
+    }
+    QPainter p(viewport());
+    p.setPen(palette().color(QPalette::Active, QPalette::PlaceholderText));
+    p.drawText(viewport()->rect().adjusted(32, 0, -32, 0), Qt::AlignCenter | Qt::TextWordWrap, m_message);
+}
+
 // ---------------------------------------------------------------- NewPaneDialog
 
 NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, const QStringList &openSessions, QWidget *parent)
@@ -157,10 +174,6 @@ NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, const QStr
         programRow->addStretch();
         layout->addLayout(programRow);
     }
-    m_programHint = new QLabel(QStringLiteral("Runs in its own pane. It needs no folder and no conversation."), this);
-    m_programHint->setForegroundRole(QPalette::PlaceholderText);
-    m_programHint->hide();
-    layout->addWidget(m_programHint);
     connect(m_accounts, &QButtonGroup::buttonToggled, this, &NewPaneDialog::updateOk);
     connect(m_accounts, &QButtonGroup::buttonToggled, this, [this](QAbstractButton *, bool checked) {
         if (checked) {
@@ -334,7 +347,10 @@ void NewPaneDialog::updateOk()
     for (QWidget *w : std::as_const(m_folderParts)) {
         w->setEnabled(!program);
     }
-    m_programHint->setVisible(program);
+    // Why the folder parts are grey, said in the list itself: the dialog keeps its size.
+    auto *button = qobject_cast<AccountButton *>(m_accounts->checkedButton());
+    m_folders->setMessage(program ? QStringLiteral("%1 runs in its own pane.\nIt needs no folder and no conversation.").arg(button->account().name)
+                                  : QString());
     const QString f = folder();
     m_buttons->button(QDialogButtonBox::Ok)->setEnabled(program || (!accountKey().isEmpty() && !f.isEmpty() && QDir(f).exists()));
 }

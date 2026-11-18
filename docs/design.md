@@ -124,7 +124,8 @@ Copy, paste and search come from the embedded Konsole terminal.
   and 7 day usage next to its letter.
 * **Program**: a row of its own below the accounts, only when the config lists
   programs. Each shows its command. Choosing one greys out the folder and the
-  conversation, which a program doesn't need. The letter keys pick programs
+  conversation, which a program doesn't need, and the folder list says so in
+  its place (the dialog keeps its size). The letter keys pick programs
   too.
 * **Folder**: pinned folders first (a star pins or unpins, they keep the
   order they were pinned in), then recent folders, then a browse button.
