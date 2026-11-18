@@ -7,10 +7,11 @@
 
 namespace
 {
-// Account colours stay clear of the state colours (blue, orange, yellow, green, grey, red).
+// Bright violet, magenta and cyan first. Account colours stay clear of the state colours
+// (orange, yellow, green, grey, red); the cyan is lighter than the working blue.
 const QList<QColor> &palette()
 {
-    static const QList<QColor> colors{QColor(157, 123, 234), QColor(38, 181, 166), QColor(224, 108, 159), QColor(201, 162, 107),
+    static const QList<QColor> colors{QColor(177, 77, 255), QColor(255, 61, 200), QColor(24, 224, 255), QColor(201, 162, 107),
                                       QColor(121, 134, 203), QColor(156, 204, 101), QColor(240, 98, 146),  QColor(77, 182, 172)};
     return colors;
 }

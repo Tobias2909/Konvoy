@@ -44,8 +44,10 @@ Konvoy works with any number of Claude Code accounts, one or more. Nothing
 in the code assumes a fixed count. Each account is an entry in the config
 with a letter, a colour, the command that starts it and its config dir
 (`CLAUDE_CONFIG_DIR`). Accounts without a colour get the next one from a
-built in palette. The sidebar, the new pane dialog and the usage helper
-all follow the list. A pane runs an interactive shell
+built in palette. Its first three are bright: violet, magenta and cyan. A
+badge shows the account letter in its colour, in a dark square tinted with
+the colour and framed in it. The sidebar, the new pane dialog and the usage
+helper all follow the list. A pane runs an interactive shell
 that starts the account command, so shell functions and wrappers around
 `claude` keep working. The account of a pane can change while it runs, the
 hook reports the config dir it sees, and the pane follows.
@@ -116,9 +118,9 @@ The collapsed sidebar hides the block, and it polls only while shown.
 
 `Badge` sets a symbol, such as an emoji, for the program's badge in place of
 its key letter, wherever the badge shows: its cards, its panes' header bars,
-the new pane dialog and its status block. The symbol is drawn in a dark square
-tinted with the program's colour and framed in it, so a colourful symbol stays
-visible. The key still picks the program in the new pane dialog.
+the new pane dialog and its status block. The symbol sits in the same dark
+square tinted with the program's colour and framed in it as a letter does, so
+a colourful symbol stays visible. The key still picks the program in the new pane dialog.
 
 ## Panes and layout
 

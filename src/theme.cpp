@@ -171,14 +171,20 @@ void paintStateIcon(QPainter &p, QPointF c, PaneState state, qreal r)
     p.restore();
 }
 
+// Every badge: a dark square tinted with the colour and framed in it.
+static void paintBadgeFrame(QPainter &p, const QRectF &rect, const QColor &color)
+{
+    p.setPen(QPen(color, 1.3));
+    p.setBrush(withAlpha(color, 0.22));
+    p.drawRoundedRect(rect.adjusted(0.65, 0.65, -0.65, -0.65), 4, 4);
+}
+
 void paintSymbolBadge(QPainter &p, const QRectF &rect, const QString &symbol, const QColor &color)
 {
     p.save();
     p.setRenderHint(QPainter::Antialiasing);
     p.setRenderHint(QPainter::SmoothPixmapTransform);
-    p.setPen(QPen(color, 1.3));
-    p.setBrush(withAlpha(color, 0.22));
-    p.drawRoundedRect(rect.adjusted(0.65, 0.65, -0.65, -0.65), 4, 4);
+    paintBadgeFrame(p, rect, color);
     // Colour emoji come as bitmaps: drawn four times as large and scaled down, they stay
     // smooth at this size. Kept per symbol, size and pixel ratio.
     static QHash<QString, QImage> cache;
@@ -210,14 +216,12 @@ void paintBadge(QPainter &p, const QRectF &rect, const QString &letter, const QC
 {
     p.save();
     p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(Qt::NoPen);
-    p.setBrush(color);
-    p.drawRoundedRect(rect, 4, 4);
+    paintBadgeFrame(p, rect, color);
     QFont f = p.font();
     f.setPointSizeF(rect.height() >= 18 ? 9 : 8);
     f.setBold(true);
     p.setFont(f);
-    p.setPen(Qt::white);
+    p.setPen(color);
     p.drawText(rect, Qt::AlignCenter, letter);
     p.restore();
 }
