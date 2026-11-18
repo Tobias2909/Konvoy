@@ -36,6 +36,8 @@ the background and one is still at work.*
   assistant. Listed in your config, they show up in their own row of the new
   pane dialog and get the same states, notifications and sound when they set
   their title the way Claude Code does
+* A program can have a block of its own in the sidebar: one line about its
+  state and a few buttons, both from a command it names in your config
 * The 5 hour and 7 day usage of every account with its reset times. A click on
   a reset time shows the time left instead
 * Focus mode shows one session big while the sidebar keeps an eye on the rest

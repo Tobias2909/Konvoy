@@ -23,6 +23,7 @@ add_executable(konvoy
     src/mainwindow.cpp
     src/usage.cpp
     src/usageblock.cpp
+    src/programstatus.cpp
     src/chats.cpp
 )
 

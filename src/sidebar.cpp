@@ -3,6 +3,7 @@
 #include "pane.h"
 #include "theme.h"
 #include "usage.h"
+#include "programstatus.h"
 #include "usageblock.h"
 
 #include <QActionGroup>
@@ -201,7 +202,7 @@ void CardList::paintCard(QPainter &p, const Pane *pane, const QRectF &r, int num
     const qreal line1 = r.y() + 16;
     Theme::paintStateIcon(p, QPointF(r.x() + 18, line1), state);
     p.setOpacity(minimized ? 0.5 : 1.0);
-    Theme::paintBadge(p, QRectF(r.x() + 32, line1 - 9, 18, 18), pane->account().key, pane->account().color);
+    Theme::paintBadge(p, QRectF(r.x() + 32, line1 - 9, 18, 18), pane->account());
     p.setOpacity(1.0);
 
     // Right side of line 1: state text with its duration, then the Alt number.
@@ -581,6 +582,14 @@ Sidebar::Sidebar(const Config *config, const UsageModel *usage, QWidget *parent)
     // The wheel steps through the panes here too, instead of scrolling the cards.
     m_scroll->viewport()->installEventFilter(this);
     layout->addWidget(m_scroll, 1);
+    for (const Account &program : config->programs()) {
+        if (program.status.isEmpty()) {
+            continue;
+        }
+        auto *block = new ProgramStatusBlock(program, m_full);
+        connect(block, &ProgramStatusBlock::paneRequested, this, &Sidebar::programPaneRequested);
+        layout->addWidget(block);
+    }
     layout->addWidget(new UsageBlock(config, usage, m_full));
     outer->addWidget(m_full);
 

@@ -235,7 +235,7 @@ void PaneHeader::paintEvent(QPaintEvent *)
     }
     p.fillRect(QRectF(0, r.height() - 2, r.width(), 2), m_pane->isCurrent() ? Theme::accent() : pal.color(QPalette::Mid));
 
-    Theme::paintBadge(p, QRectF(8, 5, 18, 18), m_pane->account().key, m_pane->account().color);
+    Theme::paintBadge(p, QRectF(8, 5, 18, 18), m_pane->account());
 
     QFont bold = font();
     bold.setWeight(QFont::DemiBold);

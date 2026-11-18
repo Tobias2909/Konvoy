@@ -116,6 +116,8 @@ Q_SIGNALS:
     void paneCloseRequested(Pane *pane);
     void paneMoved(Pane *pane, int index);
     void emptyClicked(); // the sidebar's empty space, with the left button
+    // A button in a program's status block asks for a new pane of that program.
+    void programPaneRequested(const QString &key);
     // The wheel over the sidebar: steps > 0 means the next panes, < 0 the previous.
     void paneStepRequested(int steps);
 

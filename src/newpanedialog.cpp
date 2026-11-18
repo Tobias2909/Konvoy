@@ -69,7 +69,7 @@ void AccountButton::paintEvent(QPaintEvent *)
     p.setBrush(isChecked() ? Theme::withAlpha(m_account.color, 0.22) : bg);
     p.drawRoundedRect(r, 6, 6);
 
-    Theme::paintBadge(p, QRectF(r.x() + 10, r.y() + 9, 20, 20), m_account.key, m_account.color);
+    Theme::paintBadge(p, QRectF(r.x() + 10, r.y() + 9, 20, 20), m_account);
 
     QFont bold = font();
     bold.setWeight(QFont::DemiBold);

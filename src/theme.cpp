@@ -1,6 +1,9 @@
 #include "theme.h"
+#include "config.h"
 
 #include <QApplication>
+#include <QHash>
+#include <QImage>
 #include <QPainterPath>
 #include <QPalette>
 
@@ -168,6 +171,41 @@ void paintStateIcon(QPainter &p, QPointF c, PaneState state, qreal r)
     p.restore();
 }
 
+void paintSymbolBadge(QPainter &p, const QRectF &rect, const QString &symbol, const QColor &color)
+{
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.setPen(QPen(color, 1.3));
+    p.setBrush(withAlpha(color, 0.22));
+    p.drawRoundedRect(rect.adjusted(0.65, 0.65, -0.65, -0.65), 4, 4);
+    // Colour emoji come as bitmaps: drawn four times as large and scaled down, they stay
+    // smooth at this size. Kept per symbol, size and pixel ratio.
+    static QHash<QString, QImage> cache;
+    const qreal dpr = p.device() ? p.device()->devicePixelRatioF() : 1.0;
+    const int px = qRound(rect.height() * dpr);
+    const QString key = QStringLiteral("%1/%2").arg(symbol).arg(px);
+    QImage image = cache.value(key);
+    if (image.isNull()) {
+        const int big = px * 4;
+        QImage glyph(big, big, QImage::Format_ARGB32_Premultiplied);
+        glyph.fill(Qt::transparent);
+        {
+            QPainter g(&glyph);
+            QFont f = p.font();
+            f.setPixelSize(int(big * 0.6));
+            g.setFont(f);
+            g.setPen(Qt::white);
+            g.drawText(QRect(0, 0, big, big), Qt::AlignCenter, symbol);
+        }
+        image = glyph.scaled(px, px, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        image.setDevicePixelRatio(dpr);
+        cache.insert(key, image);
+    }
+    p.drawImage(rect.topLeft(), image);
+    p.restore();
+}
+
 void paintBadge(QPainter &p, const QRectF &rect, const QString &letter, const QColor &color)
 {
     p.save();
@@ -184,4 +222,12 @@ void paintBadge(QPainter &p, const QRectF &rect, const QString &letter, const QC
     p.restore();
 }
 
+void paintBadge(QPainter &p, const QRectF &rect, const Account &account)
+{
+    if (account.badge.isEmpty()) {
+        paintBadge(p, rect, account.key, account.color);
+    } else {
+        paintSymbolBadge(p, rect, account.badge, account.color);
+    }
+}
 }

@@ -20,7 +20,8 @@ and shows at a glance which of them is waiting for you.
   (230 to 640 px), and it collapses to a 44 px strip that only shows the
   state icons, account stripes and small usage bars. Top: buttons for new
   pane, overview/focus, equal sizes and columns, and on the right collapse.
-  Middle: one card per pane. Bottom: the usage block.
+  Middle: one card per pane. Bottom: a status block for each program that
+  has one, then the usage block.
 * **Pane cards**: a stripe in the state colour on the left, the state icon,
   the account badge, the folder, the state text with its duration and the
   `Alt` number on the first line, the chat title on the second. Panes that
@@ -71,6 +72,53 @@ Esc, a digit) don't count here; the program's title says when it was answered.
 Every 2 seconds the pane checks the terminal's foreground process: once the
 program has run, the shell back in front means it ended, and the pane shows
 exited with the Restart button, which starts the command again.
+
+## Program status
+
+A program can name a `Status` command in its `[Program <key>]` group. Konvoy
+then gives it a block in the sidebar, above the usage block: the program's
+badge and name in capitals as a heading with up to four buttons at its right
+end, and below that one line with a state dot and a short text. Konvoy knows
+nothing else about the program; the command says what to show.
+
+Konvoy runs the command every `StatusEvery` seconds (10 by default, 2 to
+3600) through `/bin/sh -c`, like a pane's command, with no input. It must
+print one JSON object within 10 seconds and exit with 0:
+
+```json
+{"state": "busy",
+ "text": "open · model 4.6 GB · documents scan",
+ "tip": "lines for the block's tooltip",
+ "buttons": [{"id": "release", "icon": "media-eject", "tip": "Release the model",
+              "enabled": true},
+             {"id": "unlock", "icon": "object-unlocked", "tip": "Open a pane",
+              "pane": true}]}
+```
+
+* `state` is the dot: `ok` a green dot, `busy` the working spinner (and the
+  text in the normal text colour, the others are dim), `warn` an orange dot,
+  `locked` a small padlock, `off` (or anything else) a hollow circle.
+* `text` is elided at the sidebar's width. `tip` is the whole block's
+  tooltip.
+* `buttons` are icon buttons, in this order from the left. `icon` is a theme
+  icon name; `enabled` is true when left out. A click runs the same command
+  with the button's `id` as its first argument (`"$1"` in the shell, so
+  `Status=my-tool status` runs `my-tool status release`). That run may take
+  60 seconds and prints the new state, which the block shows at once. A
+  button with `"pane": true` runs nothing and opens a new pane of the program
+  instead, for what needs a terminal (a password, say).
+
+One command runs at a time: a click during a poll runs after it. When the
+command fails (cannot start, too slow, an exit code other than 0, or no JSON
+object), the block shows an orange dot and "no status", without buttons, and
+its tooltip gives the reason with the first line the command wrote to stderr.
+The collapsed sidebar hides the block, and it polls only while shown.
+
+`Badge` sets a symbol, such as an emoji, for the program's badge in place of
+its key letter, wherever the badge shows: its cards, its panes' header bars,
+the new pane dialog and its status block. The symbol is drawn in a dark square
+tinted with the program's colour and framed in it, so a colourful symbol stays
+visible. The key still picks the program in the new pane dialog.
 
 ## Panes and layout
 

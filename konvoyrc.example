@@ -30,12 +30,20 @@ ConfigDir=~/.claude-work
 #   Name       shown in the sidebar and the new pane dialog
 #   Command    what the pane's shell runs
 #   Color      optional, as for accounts
+#   Status     optional, a command that prints the program's state as JSON;
+#              the program then gets a block in the sidebar with its buttons
+#              (see docs/design.md, "Program status")
+#   StatusEvery  seconds between two runs of Status, 10 by default
+#   Badge      optional, a symbol such as 🌿 that the program's badge shows
+#              everywhere in place of its key letter
 #
 # Programs=F
 #
 # [Program F]
 # Name=Assistant
 # Command=my-assistant-chat
+# Status=my-assistant-ctl konvoy
+# Badge=🌿
 
 [Folders]
 # Always listed first in the new pane dialog. The star in the dialog edits this.

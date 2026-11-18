@@ -62,6 +62,9 @@ void Config::loadAccounts()
         a.name = g.readEntry("Name", key);
         a.command = g.readEntry("Command", QString());
         a.program = true;
+        a.status = g.readEntry("Status", QString());
+        a.statusEvery = qBound(2, g.readEntry("StatusEvery", 10), 3600);
+        a.badge = g.readEntry("Badge", QString());
         a.color = QColor::fromString(g.readEntry("Color", QString()));
         if (!a.color.isValid()) {
             a.color = palette().at(paletteIndex % palette().size());

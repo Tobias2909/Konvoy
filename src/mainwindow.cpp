@@ -119,6 +119,11 @@ MainWindow::MainWindow(Config *config, QWidget *parent)
     m_sidebar->setColumns(config->columns());
 
     connect(m_sidebar, &Sidebar::newPaneRequested, this, &MainWindow::newPane);
+    connect(m_sidebar, &Sidebar::programPaneRequested, this, [this](const QString &key) {
+        if (Pane *pane = openPane(key, QString())) {
+            showPane(pane);
+        }
+    });
     connect(m_sidebar, &Sidebar::focusModeToggled, m_grid, &PaneGrid::setFocusMode);
     connect(m_sidebar, &Sidebar::equalSizesRequested, m_grid, &PaneGrid::equalizeSizes);
     connect(m_sidebar, &Sidebar::columnsRequested, this, [this](int columns) {

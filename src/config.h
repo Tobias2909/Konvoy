@@ -15,6 +15,11 @@ struct Account {
     // Another program instead of Claude Code, such as a chat with a local assistant.
     // Its pane has no folder, chats, hooks or usage; the state comes from its title.
     bool program = false;
+    // A program's optional block in the sidebar: a command that prints its state as JSON,
+    // run every statusEvery seconds (see ProgramStatusBlock), and a symbol for its badge.
+    QString status;
+    int statusEvery = 10;
+    QString badge;
 };
 
 // Konvoy's settings, ~/.config/konvoyrc unless another file is given.
