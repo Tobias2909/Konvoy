@@ -33,6 +33,8 @@ Config::Config(const QString &file)
 void Config::loadAccounts()
 {
     const QStringList keys = m_config->group(QStringLiteral("General")).readEntry("Accounts", QStringList());
+    // A palette colour follows the entry's place in the list, so giving one entry its
+    // own colour changes no other entry's.
     int paletteIndex = 0;
     for (const QString &key : keys) {
         const KConfigGroup g = m_config->group(QStringLiteral("Account ") + key);
@@ -43,21 +45,43 @@ void Config::loadAccounts()
         a.configDir = QDir::cleanPath(expandHome(g.readEntry("ConfigDir", QStringLiteral("~/.claude"))));
         a.color = QColor::fromString(g.readEntry("Color", QString()));
         if (!a.color.isValid()) {
-            a.color = palette().at(paletteIndex++ % palette().size());
+            a.color = palette().at(paletteIndex % palette().size());
         }
+        ++paletteIndex;
         m_accounts.append(a);
     }
     if (m_accounts.isEmpty()) {
         m_accounts.append(Account{QStringLiteral("A"), QStringLiteral("claude"), QStringLiteral("claude"),
                                   QDir::cleanPath(expandHome(QStringLiteral("~/.claude"))), palette().first()});
     }
+    const QStringList programs = m_config->group(QStringLiteral("General")).readEntry("Programs", QStringList());
+    for (const QString &key : programs) {
+        const KConfigGroup g = m_config->group(QStringLiteral("Program ") + key);
+        Account a;
+        a.key = key;
+        a.name = g.readEntry("Name", key);
+        a.command = g.readEntry("Command", QString());
+        a.program = true;
+        a.color = QColor::fromString(g.readEntry("Color", QString()));
+        if (!a.color.isValid()) {
+            a.color = palette().at(paletteIndex % palette().size());
+        }
+        ++paletteIndex;
+        if (account(key) || a.command.isEmpty()) {
+            qWarning("konvoy: program %s needs a Command and a letter no account uses", qPrintable(key));
+            continue;
+        }
+        m_programs.append(a);
+    }
 }
 
 const Account *Config::account(const QString &key) const
 {
-    for (const Account &a : m_accounts) {
-        if (a.key == key) {
-            return &a;
+    for (const QList<Account> *list : {&m_accounts, &m_programs}) {
+        for (const Account &a : *list) {
+            if (a.key == key) {
+                return &a;
+            }
         }
     }
     return nullptr;

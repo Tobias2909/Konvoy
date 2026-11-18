@@ -12,6 +12,7 @@ class QComboBox;
 class QTimer;
 class QDialogButtonBox;
 class QLineEdit;
+class QLabel;
 
 // One account in the dialog: badge, name and its usage.
 class AccountButton : public QAbstractButton
@@ -58,6 +59,7 @@ public:
     QString accountKey() const;
     QString folder() const;
     QString sessionId() const; // empty for a new chat
+    bool isProgram() const;
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -76,4 +78,6 @@ private:
     QTimer *m_chatsTimer;
     QStringList m_openSessions;
     QDialogButtonBox *m_buttons;
+    QList<QWidget *> m_folderParts; // greyed out while a program is chosen
+    QLabel *m_programHint;
 };

@@ -21,6 +21,22 @@ Name=work
 Command=CLAUDE_CONFIG_DIR=~/.claude-work claude
 ConfigDir=~/.claude-work
 
+# Optional: other terminal programs that get a pane, listed under
+# Programs and each with a group [Program <key>]. Their keys must differ from
+# the accounts'. The new pane dialog shows them in their own row; they need no
+# folder or chat. A program shows its state the way Claude Code does, with a
+# symbol in front of its terminal title: ◐ or ◑ while it works, ✳ when it is
+# done, and ? while it waits for you.
+#   Name       shown in the sidebar and the new pane dialog
+#   Command    what the pane's shell runs
+#   Color      optional, as for accounts
+#
+# Programs=F
+#
+# [Program F]
+# Name=Assistant
+# Command=my-assistant-chat
+
 [Folders]
 # Always listed first in the new pane dialog. The star in the dialog edits this.
 Pinned=~/projects/app,~/projects/site

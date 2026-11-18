@@ -32,6 +32,10 @@ the background and one is still at work.*
   off
 * Several Claude accounts side by side, each in its own colour. Every new
   session asks which account to use
+* Other terminal programs can get a pane too, such as a chat with a local
+  assistant. Listed in your config, they show up in their own row of the new
+  pane dialog and get the same states, notifications and sound when they set
+  their title the way Claude Code does
 * The 5 hour and 7 day usage of every account with its reset times. A click on
   a reset time shows the time left instead
 * Focus mode shows one session big while the sidebar keeps an eye on the rest

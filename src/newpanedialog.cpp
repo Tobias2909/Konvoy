@@ -10,6 +10,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -82,7 +83,8 @@ void AccountButton::paintEvent(QPaintEvent *)
     p.setPen(pal.color(QPalette::PlaceholderText));
     p.drawText(QRectF(r.x() + 10, r.y() + 32, r.width() - 16, 16),
                Qt::AlignVCenter | Qt::AlignLeft,
-               m_usage.isEmpty() ? QStringLiteral("5h –   7d –") : m_usage);
+               m_account.program ? QFileInfo(m_account.command.section(QLatin1Char(' '), 0, 0)).fileName()
+               : m_usage.isEmpty() ? QStringLiteral("5h –   7d –") : m_usage);
 }
 
 void AccountButton::enterEvent(QEnterEvent *)
@@ -142,6 +144,23 @@ NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, const QStr
     }
     accountRow->addStretch();
     layout->addLayout(accountRow);
+    // Programs other than Claude Code get their own row, shown only when there are any.
+    if (!config->programs().isEmpty()) {
+        layout->addSpacing(6);
+        layout->addWidget(sectionLabel(QStringLiteral("Program"), this));
+        auto *programRow = new QHBoxLayout;
+        for (const Account &program : config->programs()) {
+            auto *button = new AccountButton(program, this);
+            m_accounts->addButton(button);
+            programRow->addWidget(button);
+        }
+        programRow->addStretch();
+        layout->addLayout(programRow);
+    }
+    m_programHint = new QLabel(QStringLiteral("Runs in its own pane. It needs no folder and no conversation."), this);
+    m_programHint->setForegroundRole(QPalette::PlaceholderText);
+    m_programHint->hide();
+    layout->addWidget(m_programHint);
     connect(m_accounts, &QButtonGroup::buttonToggled, this, &NewPaneDialog::updateOk);
     connect(m_accounts, &QButtonGroup::buttonToggled, this, [this](QAbstractButton *, bool checked) {
         if (checked) {
@@ -150,7 +169,8 @@ NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, const QStr
     });
 
     layout->addSpacing(6);
-    layout->addWidget(sectionLabel(QStringLiteral("Folder"), this));
+    auto *folderLabel = sectionLabel(QStringLiteral("Folder"), this);
+    layout->addWidget(folderLabel);
     m_folders = new FolderList(this);
     m_folders->setMinimumHeight(220);
     layout->addWidget(m_folders);
@@ -184,8 +204,10 @@ NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, const QStr
 
     // The chats of the folder, read again shortly after the folder or account changes.
     layout->addSpacing(6);
-    layout->addWidget(sectionLabel(QStringLiteral("Conversation"), this));
+    auto *chatLabel = sectionLabel(QStringLiteral("Conversation"), this);
+    layout->addWidget(chatLabel);
     m_chats = new QComboBox(this);
+    m_folderParts = {folderLabel, m_folders, m_path, browse, chatLabel, m_chats};
     m_chats->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     m_chats->setMinimumContentsLength(30);
     layout->addWidget(m_chats);
@@ -217,6 +239,12 @@ QString NewPaneDialog::folder() const
 {
     const QString text = m_path->text().trimmed();
     return text.isEmpty() ? QString() : QDir::cleanPath(Config::expandHome(text));
+}
+
+bool NewPaneDialog::isProgram() const
+{
+    auto *button = qobject_cast<AccountButton *>(m_accounts->checkedButton());
+    return button && button->account().program;
 }
 
 QString NewPaneDialog::sessionId() const
@@ -302,8 +330,13 @@ void NewPaneDialog::togglePin(const QString &folder)
 
 void NewPaneDialog::updateOk()
 {
+    const bool program = isProgram();
+    for (QWidget *w : std::as_const(m_folderParts)) {
+        w->setEnabled(!program);
+    }
+    m_programHint->setVisible(program);
     const QString f = folder();
-    m_buttons->button(QDialogButtonBox::Ok)->setEnabled(!accountKey().isEmpty() && !f.isEmpty() && QDir(f).exists());
+    m_buttons->button(QDialogButtonBox::Ok)->setEnabled(program || (!accountKey().isEmpty() && !f.isEmpty() && QDir(f).exists()));
 }
 
 void NewPaneDialog::keyPressEvent(QKeyEvent *event)

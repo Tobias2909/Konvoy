@@ -49,6 +49,29 @@ that starts the account command, so shell functions and wrappers around
 `claude` keep working. The account of a pane can change while it runs, the
 hook reports the config dir it sees, and the pane follows.
 
+An entry without its own colour gets the palette colour of its place in the
+list, so giving one entry a colour leaves the others' as they were.
+
+## Programs
+
+Besides Claude Code, the config can list other terminal programs (`Programs`,
+one `[Program <key>]` group each, with a name, a command and an optional
+colour), such as a chat with a local assistant. A program pane runs its
+command the same way, in the user's shell, but has no folder, chat list, hooks
+or usage: it starts in the home folder, its card and header show the
+program's name where a Claude pane shows its folder, and its terminal title
+below that.
+
+Its state comes from its title alone, with Claude Code's symbols: `◐` or `◑`
+while it works, `✳` when it is done, and `?` while it waits for the user,
+which shows as question. A still symbol after `?` means the user answered, and
+the pane turns idle. So working, done, idle, question, the notifications and
+the sound work as for Claude. The keys that end a dialog for Claude (Enter,
+Esc, a digit) don't count here; the program's title says when it was answered.
+Every 2 seconds the pane checks the terminal's foreground process: once the
+program has run, the shell back in front means it ended, and the pane shows
+exited with the Restart button, which starts the command again.
+
 ## Panes and layout
 
 * **Overview mode** shows all panes in an automatic grid: 1 pane fills the
@@ -99,6 +122,10 @@ Copy, paste and search come from the embedded Konsole terminal.
 
 * **Account**: nothing is preselected. Each account shows its current 5 hour
   and 7 day usage next to its letter.
+* **Program**: a row of its own below the accounts, only when the config lists
+  programs. Each shows its command. Choosing one greys out the folder and the
+  conversation, which a program doesn't need. The letter keys pick programs
+  too.
 * **Folder**: pinned folders first (a star pins or unpins, they keep the
   order they were pinned in), then recent folders, then a browse button.
   The last used folder is selected.
@@ -290,7 +317,7 @@ row says from when the numbers are.
   for an answer or runs background tasks there. Middle click on a card or a header closes a pane.
 * On the next start Konvoy restores the panes with their order, slot sizes,
   folders and accounts, and continues each chat with `--resume` and the
-  last session id the pane saw. Focus mode, the current pane, the minimized
+  last session id the pane saw. A program pane starts its command anew. Focus mode, the current pane, the minimized
   panes, the sidebar width and collapse and the window size come back too. The layout is saved
   a second after each change and on close, in `konvoystaterc` in the XDG
   state folder. A config given with `--config` keeps its own state next to

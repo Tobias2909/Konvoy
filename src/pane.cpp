@@ -239,7 +239,7 @@ void PaneHeader::paintEvent(QPaintEvent *)
 
     QFont bold = font();
     bold.setWeight(QFont::DemiBold);
-    const QString folder = Config::collapseHome(m_pane->folder());
+    const QString folder = m_pane->place();
     const int folderWidth = QFontMetrics(bold).horizontalAdvance(folder);
     p.setFont(bold);
     p.setPen(pal.color(QPalette::WindowText));
@@ -477,7 +477,7 @@ void Pane::releaseReservedShortcuts()
 void Pane::start(const QString &shell, const QString &resumeSession)
 {
     QString command = m_account.command;
-    if (!resumeSession.isEmpty()) {
+    if (!resumeSession.isEmpty() && !isProgram()) {
         command += QStringLiteral(" --resume ") + resumeSession;
         m_sessionId = resumeSession;
     }
@@ -536,6 +536,18 @@ void Pane::setCaption(const QString &caption)
     const QChar symbol = trimmed.at(0);
     const bool animating = symbol == QChar(0x25D0) || symbol == QChar(0x25D1);
     m_titleSeen = true;
+    if (isProgram()) {
+        // A program has no hooks; its title says it all. Besides Claude's symbols it may
+        // show "?": it waits for you, like a question. A still symbol after that means
+        // you answered.
+        if (symbol == QLatin1Char('?') && m_hookState != PaneState::Question) {
+            m_hookState = PaneState::Question;
+            m_seen = false;
+        } else if (symbol != QLatin1Char('?') && m_hookState == PaneState::Question) {
+            m_hookState = PaneState::Idle;
+            m_seen = true;
+        }
+    }
     if (animating && !m_animating) {
         // Konsole reports titles up to about 2 s late. A dialog hook from just before
         // this report belongs to a dialog that opened after the reported spin, so it
@@ -767,7 +779,7 @@ void Pane::restartClaude()
         return;
     }
     QString command = m_account.command;
-    if (!m_sessionId.isEmpty()) {
+    if (!m_sessionId.isEmpty() && !isProgram()) {
         command += QStringLiteral(" --resume ") + m_sessionId;
     }
     m_terminal->sendInput(command + QLatin1Char('\n'));
@@ -783,7 +795,7 @@ bool Pane::eventFilter(QObject *watched, QEvent *event)
 {
     // Enter, Esc or a digit while a dialog waits: if Claude neither starts working
     // nor reports anything soon after, the dialog was declined or dismissed.
-    if (event->type() == QEvent::KeyPress && Theme::needsYou(m_state)) {
+    if (event->type() == QEvent::KeyPress && Theme::needsYou(m_state) && !isProgram()) {
         const int key = static_cast<QKeyEvent *>(event)->key();
         if (key == Qt::Key_Return || key == Qt::Key_Enter || key == Qt::Key_Escape || (key >= Qt::Key_1 && key <= Qt::Key_9)) {
             m_answerKeyAt = QDateTime::currentMSecsSinceEpoch();
@@ -852,9 +864,18 @@ void Pane::focusTerminal()
     }
 }
 
+QString Pane::place() const
+{
+    return isProgram() ? m_account.name : Config::collapseHome(m_folder);
+}
+
 void Pane::watchClaude()
 {
     if (!m_terminal) {
+        return;
+    }
+    if (isProgram()) {
+        watchProgram();
         return;
     }
     // Same claude as last time: nothing to do, and no /proc scan.
@@ -887,6 +908,25 @@ void Pane::watchClaude()
     // Claude is gone without a SessionEnd (a crash, a kill): the pane shows it.
     if (hadClaude && !m_exited) {
         m_exited = true;
+        recompute();
+    }
+}
+
+void Pane::watchProgram()
+{
+    // The program runs in the foreground of the pane's shell. Once it has run, the
+    // shell back in the foreground means it ended: the pane shows exited and offers
+    // a restart.
+    if (m_terminal->foregroundProcessId() > 0) {
+        m_programSeen = true;
+        if (m_exited) {
+            m_exited = false;
+            recompute();
+        }
+    } else if (m_programSeen && !m_exited) {
+        m_exited = true;
+        m_hookState = PaneState::Starting;
+        m_animating = false;
         recompute();
     }
 }

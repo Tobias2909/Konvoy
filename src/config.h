@@ -10,8 +10,11 @@ struct Account {
     QString key;       // also the letter on the badge
     QString name;
     QString command;   // run by the pane's shell
-    QString configDir; // absolute, the account's CLAUDE_CONFIG_DIR
+    QString configDir; // absolute, the account's CLAUDE_CONFIG_DIR; empty for a program
     QColor color;
+    // Another program instead of Claude Code, such as a chat with a local assistant.
+    // Its pane has no folder, chats, hooks or usage; the state comes from its title.
+    bool program = false;
 };
 
 // Konvoy's settings, ~/.config/konvoyrc unless another file is given.
@@ -21,6 +24,8 @@ public:
     explicit Config(const QString &file = QString());
 
     const QList<Account> &accounts() const { return m_accounts; }
+    const QList<Account> &programs() const { return m_programs; }
+    // An account or a program.
     const Account *account(const QString &key) const;
     const Account *accountForConfigDir(const QString &dir) const;
 
@@ -58,4 +63,5 @@ private:
     KSharedConfigPtr m_state;
     QString m_usageKeep;
     QList<Account> m_accounts;
+    QList<Account> m_programs;
 };

@@ -67,7 +67,8 @@ QString paneTooltip(const Pane *pane, const QString &hint)
     if (pane->state() == PaneState::Background) {
         state += QStringLiteral(": ") + pane->backgroundTasks().join(QStringLiteral(", "));
     }
-    return QStringLiteral("%1 · %2\n%3\n%4\n\n%5").arg(pane->account().name, Config::collapseHome(pane->folder()), pane->title(), state, hint);
+    const QString where = pane->isProgram() ? pane->title() : Config::collapseHome(pane->folder()) + QLatin1Char('\n') + pane->title();
+    return QStringLiteral("%1 · %2\n%3\n\n%4").arg(pane->account().name, where, state, hint);
 }
 
 // The mark of a minimized pane: a short bar, as on the header's minimize button.
@@ -218,9 +219,9 @@ void CardList::paintCard(QPainter &p, const Pane *pane, const QRectF &r, int num
     p.setPen(minimized ? dim : text);
     p.drawText(QRectF(folderX, line1 - 10, folderWidth, 20),
                Qt::AlignVCenter | Qt::AlignLeft,
-               QFontMetrics(bold).elidedText(QDir(pane->folder()).dirName(), Qt::ElideRight, int(folderWidth)));
+               QFontMetrics(bold).elidedText(pane->isProgram() ? pane->place() : QDir(pane->folder()).dirName(), Qt::ElideRight, int(folderWidth)));
 
-    const QString title = pane->title().isEmpty() ? Config::collapseHome(pane->folder()) : pane->title();
+    const QString title = pane->title().isEmpty() ? pane->place() : pane->title();
     const qreal titleWidth = r.width() - 40 - (minimized ? 16 : 0);
     p.setFont(small);
     p.setPen(minimized ? Theme::withAlpha(dim, 0.7) : dim);

@@ -68,6 +68,9 @@ bool stopped(PaneState state)
 QString describe(const Pane *pane)
 {
     const QString title = pane->title().isEmpty() ? QString() : QStringLiteral(" · ") + pane->title();
+    if (pane->isProgram()) {
+        return pane->place() + title;
+    }
     return QStringLiteral("%1 · %2%3").arg(pane->account().name, Config::collapseHome(pane->folder()), title);
 }
 }
@@ -247,8 +250,11 @@ Pane *MainWindow::openPane(const QString &accountKey, const QString &folder, con
         qWarning("konvoy: unknown account %s", qPrintable(accountKey));
         return nullptr;
     }
-    const QString dir = QDir::cleanPath(Config::expandHome(folder));
-    m_config->addRecentFolder(dir);
+    // A program needs no folder; it starts in the home folder.
+    const QString dir = account->program ? QDir::homePath() : QDir::cleanPath(Config::expandHome(folder));
+    if (!account->program) {
+        m_config->addRecentFolder(dir);
+    }
     auto *pane = new Pane(m_config, *account, dir, resumeSession, m_grid);
     adoptPane(pane);
     return pane;
@@ -511,7 +517,7 @@ void MainWindow::notify(Pane *pane)
         : state == PaneState::Question                   ? QStringLiteral("question")
                                                          : QStringLiteral("done");
     auto *n = new KNotification(event, KNotification::CloseOnTimeout);
-    n->setTitle(QStringLiteral("%1 · %2").arg(pane->account().key, QDir(pane->folder()).dirName()));
+    n->setTitle(pane->isProgram() ? pane->place() : QStringLiteral("%1 · %2").arg(pane->account().key, QDir(pane->folder()).dirName()));
     QString text = Theme::stateText(state);
     if (!pane->title().isEmpty()) {
         text += QStringLiteral(" · ") + pane->title();

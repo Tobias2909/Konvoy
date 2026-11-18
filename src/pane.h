@@ -64,6 +64,10 @@ public:
     QString id() const { return m_id; }
     const Account &account() const { return m_account; }
     QString folder() const { return m_folder; }
+    // A program pane (not Claude Code): no folder, chats or hooks.
+    bool isProgram() const { return m_account.program; }
+    // What the header and the card name the pane by: the folder, or the program's name.
+    QString place() const;
     QString title() const { return m_title; }
     PaneState state() const { return m_state; }
     qint64 stateSince() const { return m_stateSince; }
@@ -121,6 +125,7 @@ private:
     void setCaption(const QString &caption);
     void setState(PaneState state);
     void watchClaude();
+    void watchProgram();
     void openEventFile();
     void readEvents();
     void applyEvent(const QStringList &fields);
@@ -163,4 +168,5 @@ private:
     qint64 m_answerKeyAt = 0;
     QStringList m_backgroundTasks;
     int m_quietChecks = 0;       // checks in a row without a background shell
+    bool m_programSeen = false;  // a program pane's program has run
 };
