@@ -9,17 +9,21 @@
 #   Color      optional, a palette colour is used when missing
 
 [General]
-Accounts=A,B
+Accounts=A
 
 [Account A]
 Name=claude
 Command=claude
 ConfigDir=~/.claude
 
-[Account B]
-Name=work
-Command=CLAUDE_CONFIG_DIR=~/.claude-work claude
-ConfigDir=~/.claude-work
+# A second account with its own config folder: add its key to Accounts
+# (Accounts=A,B), start its Command once in a terminal to log in, then run
+# konvoy --install-hooks again.
+#
+# [Account B]
+# Name=work
+# Command=CLAUDE_CONFIG_DIR=~/.claude-work claude
+# ConfigDir=~/.claude-work
 
 # Optional: other terminal programs that get a pane, listed under
 # Programs and each with a group [Program <key>]. Their keys must differ from

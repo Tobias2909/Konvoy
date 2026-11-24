@@ -280,7 +280,10 @@ id.
 Code `settings.json` (symlinked files once) and shows what it adds first. It
 never edits or removes other hooks, and Claude Code runs all hooks of an
 event, so existing hooks keep working everywhere. `konvoy --remove-hooks`
-removes exactly Konvoy's entries, `konvoy --hooks-status` lists them. The
+removes exactly Konvoy's entries, `konvoy --hooks-status` lists them. An
+account whose config folder does not exist is skipped with a message and
+the install ends with an error; the folder is never created, so a typo in
+`ConfigDir` cannot leave the hooks where no Claude Code reads them. The
 hooks only observe. They print nothing and never return an allow or deny
 decision. Outside a Konvoy pane (`KONVOY_PANE` unset) they exit at once.
 They run synchronously, which keeps the events in order; each takes a few
