@@ -17,6 +17,11 @@ struct UsageWindow {
     bool known() const { return percent >= 0; }
     // The window ended after these numbers were taken: it starts again from 0.
     bool passed(qint64 now) const { return resetsAt > 0 && resetsAt <= now; }
+    // Used up and not reset since: the account is at its limit until resetsAt. Rounded
+    // like percentText, so a window counts as full exactly when it reads 100%.
+    bool full(qint64 now) const { return known() && !passed(now) && qRound(percent) >= 100; }
+    // "32%", "0%" once the window has passed, "–" when unknown.
+    QString percentText(qint64 now) const;
 };
 
 struct AccountUsage {
@@ -53,7 +58,7 @@ public:
     // No pane of the account is open, so its numbers may be out of date.
     bool stale(const AccountUsage &usage) const;
 
-    // "5h 32%   7d 68%" for the new pane dialog.
+    // "5h 32%   7d 68%" for the tooltip on the sidebar's usage rows.
     QString shortText(const QString &key) const;
 
 Q_SIGNALS:

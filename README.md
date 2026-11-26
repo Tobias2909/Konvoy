@@ -31,7 +31,8 @@ the background and one is still at work.*
   screen. The speaker button in the sidebar or `Ctrl+Shift+B` turns it on and
   off
 * Several Claude accounts side by side, each in its own colour. Every new
-  session asks which account to use
+  session asks which account to use, and an account at its limit shows
+  greyed out there
 * Other terminal programs can get a pane too, such as a chat with a local
   assistant. Listed in your config, they show up in their own row of the new
   pane dialog and get the same states, notifications and sound when they set

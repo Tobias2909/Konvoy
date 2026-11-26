@@ -171,7 +171,10 @@ Copy, paste and search come from the embedded Konsole terminal.
 ## New pane dialog
 
 * **Account**: nothing is preselected. Each account shows its current 5 hour
-  and 7 day usage next to its letter.
+  and 7 day usage next to its letter. An account at its limit (a window that
+  reads 100 % and has not reset yet) is greyed out, with that 100 % in red. It
+  can still be picked and opened, and it turns normal again by itself when the
+  window resets.
 * **Program**: a row of its own below the accounts, only when the config lists
   programs. Each shows its command. Choosing one greys out the folder and the
   conversation, which a program doesn't need, and the folder list says so in

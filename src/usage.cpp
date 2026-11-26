@@ -27,14 +27,14 @@ UsageWindow readWindow(const QJsonObject &o)
     }
     return w;
 }
+}
 
-QString percentText(const UsageWindow &w, qint64 now)
+QString UsageWindow::percentText(qint64 now) const
 {
-    if (!w.known()) {
+    if (!known()) {
         return QStringLiteral("–");
     }
-    return QStringLiteral("%1%").arg(w.passed(now) ? 0 : qRound(w.percent));
-}
+    return QStringLiteral("%1%").arg(passed(now) ? 0 : qRound(percent));
 }
 
 UsageModel::UsageModel(QObject *parent)
@@ -170,5 +170,5 @@ QString UsageModel::shortText(const QString &key) const
         return QString();
     }
     const qint64 now = QDateTime::currentSecsSinceEpoch();
-    return QStringLiteral("5h %1   7d %2").arg(percentText(u->fiveHour, now), percentText(u->sevenDay, now));
+    return QStringLiteral("5h %1   7d %2").arg(u->fiveHour.percentText(now), u->sevenDay.percentText(now));
 }

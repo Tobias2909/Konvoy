@@ -5,15 +5,18 @@
 #include <QListWidget>
 
 #include "config.h"
+#include "usage.h"
 
-class UsageModel;
+#include <optional>
+
 class QButtonGroup;
 class QComboBox;
 class QTimer;
 class QDialogButtonBox;
 class QLineEdit;
 
-// One account in the dialog: badge, name and its usage.
+// One account in the dialog: badge, name and its usage. An account at its limit is
+// greyed out, with the full window's 100% in red, and can still be picked.
 class AccountButton : public QAbstractButton
 {
     Q_OBJECT
@@ -21,7 +24,7 @@ public:
     AccountButton(const Account &account, QWidget *parent = nullptr);
     QSize sizeHint() const override;
     const Account &account() const { return m_account; }
-    void setUsageText(const QString &text);
+    void setUsage(const AccountUsage *usage); // null: none known
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -30,7 +33,7 @@ protected:
 
 private:
     Account m_account;
-    QString m_usage;
+    std::optional<AccountUsage> m_usage;
     bool m_hover = false;
 };
 

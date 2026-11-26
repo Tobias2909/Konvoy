@@ -5,6 +5,8 @@
 
 #include <QButtonGroup>
 #include <QComboBox>
+#include <QDateTime>
+#include <QFontMetricsF>
 #include <QStandardItemModel>
 #include <QTimer>
 #include <QDialogButtonBox>
@@ -51,9 +53,9 @@ QSize AccountButton::sizeHint() const
     return QSize(150, 54);
 }
 
-void AccountButton::setUsageText(const QString &text)
+void AccountButton::setUsage(const AccountUsage *usage)
 {
-    m_usage = text;
+    m_usage = usage ? std::optional<AccountUsage>(*usage) : std::nullopt;
     update();
 }
 
@@ -69,6 +71,11 @@ void AccountButton::paintEvent(QPaintEvent *)
     p.setBrush(isChecked() ? Theme::withAlpha(m_account.color, 0.22) : bg);
     p.drawRoundedRect(r, 6, 6);
 
+    // At its limit: the frame stays as it is, so a pick still shows; the content fades.
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    const bool limited = m_usage && (m_usage->fiveHour.full(now) || m_usage->sevenDay.full(now));
+    const qreal opacity = limited ? 0.4 : 1;
+    p.setOpacity(opacity);
     Theme::paintBadge(p, QRectF(r.x() + 10, r.y() + 9, 20, 20), m_account);
 
     QFont bold = font();
@@ -81,10 +88,25 @@ void AccountButton::paintEvent(QPaintEvent *)
     small.setPointSizeF(font().pointSizeF() - 1);
     p.setFont(small);
     p.setPen(pal.color(QPalette::PlaceholderText));
-    p.drawText(QRectF(r.x() + 10, r.y() + 32, r.width() - 16, 16),
-               Qt::AlignVCenter | Qt::AlignLeft,
-               m_account.program ? QFileInfo(m_account.command.section(QLatin1Char(' '), 0, 0)).fileName()
-               : m_usage.isEmpty() ? QStringLiteral("5h –   7d –") : m_usage);
+    const QRectF line(r.x() + 10, r.y() + 32, r.width() - 16, 16);
+    if (m_account.program || !m_usage) {
+        p.drawText(line, Qt::AlignVCenter | Qt::AlignLeft,
+                   m_account.program ? QFileInfo(m_account.command.section(QLatin1Char(' '), 0, 0)).fileName() : QStringLiteral("5h –   7d –"));
+        return;
+    }
+    // "5h 32%   7d 100%", piece by piece: a full window's percent in red at full strength.
+    const QFontMetricsF metrics(small);
+    qreal x = line.x();
+    auto piece = [&](const QString &text, bool full) {
+        p.setOpacity(full ? 1 : opacity);
+        p.setPen(full ? Theme::stateColor(PaneState::Exited) : pal.color(QPalette::PlaceholderText));
+        p.drawText(QRectF(x, line.y(), line.right() - x, line.height()), Qt::AlignVCenter | Qt::AlignLeft, text);
+        x += metrics.horizontalAdvance(text);
+    };
+    piece(QStringLiteral("5h "), false);
+    piece(m_usage->fiveHour.percentText(now), m_usage->fiveHour.full(now));
+    piece(QStringLiteral("   7d "), false);
+    piece(m_usage->sevenDay.percentText(now), m_usage->sevenDay.full(now));
 }
 
 void AccountButton::enterEvent(QEnterEvent *)
@@ -152,9 +174,10 @@ NewPaneDialog::NewPaneDialog(Config *config, const UsageModel *usage, const QStr
     m_accounts->setExclusive(true);
     for (const Account &account : config->accounts()) {
         auto *button = new AccountButton(account, this);
-        button->setUsageText(usage->shortText(account.key));
+        button->setUsage(usage->usage(account.key));
+        // Also every 30 seconds, so a limit that resets while the dialog is open lets go.
         connect(usage, &UsageModel::changed, button, [button, usage] {
-            button->setUsageText(usage->shortText(button->account().key));
+            button->setUsage(usage->usage(button->account().key));
         });
         m_accounts->addButton(button);
         accountRow->addWidget(button);
